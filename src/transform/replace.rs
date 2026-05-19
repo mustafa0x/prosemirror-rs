@@ -35,12 +35,12 @@ fn fits_trivially<S: Schema>(
     rp_to: &ResolvedPos<S>,
     slice: &Slice<S>,
 ) -> bool {
-    if slice.open_start == 0 && slice.open_end == 0 && rp_from.start(0) == rp_to.start(0) {
+    if slice.open_start == 0 && slice.open_end == 0 && rp_from.depth == rp_to.depth {
         rp_from
             .parent()
             .can_replace(
                 rp_from.index(rp_from.depth),
-                rp_to.index(rp_to.depth),
+                rp_to.index_after(rp_to.depth),
                 Some(&slice.content),
                 ..,
             )

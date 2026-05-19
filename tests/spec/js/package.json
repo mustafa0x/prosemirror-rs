@@ -1,0 +1,10 @@
+{
+  "name": "prosemirror-fixtures",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "generate": "node generate_fixtures.mjs" },
+  "dependencies": {
+    "prosemirror-model": "^1.25.0",
+    "prosemirror-transform": "^1.12.0"
+  }
+}

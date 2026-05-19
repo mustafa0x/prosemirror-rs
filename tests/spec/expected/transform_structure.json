@@ -18,7 +18,7 @@
         ]
       },
       "pos": 4,
-      "output": {
+      "expected": {
         "type": "doc",
         "content": [
           {
@@ -40,7 +40,62 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "label": "can split at the start",
+      "type": "split",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "foobar"
+              }
+            ]
+          }
+        ]
       },
+      "pos": 1,
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph"
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "foobar"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "can split at the end",
+      "type": "split",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "foobar"
+              }
+            ]
+          }
+        ]
+      },
+      "pos": 7,
       "expected": {
         "type": "doc",
         "content": [
@@ -49,18 +104,12 @@
             "content": [
               {
                 "type": "text",
-                "text": "foo"
+                "text": "foobar"
               }
             ]
           },
           {
-            "type": "paragraph",
-            "content": [
-              {
-                "type": "text",
-                "text": "bar"
-              }
-            ]
+            "type": "paragraph"
           }
         ]
       }

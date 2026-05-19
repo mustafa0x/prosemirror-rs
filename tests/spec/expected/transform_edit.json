@@ -23,27 +23,6 @@
           "type": "hard_break"
         }
       ],
-      "output": {
-        "type": "doc",
-        "content": [
-          {
-            "type": "paragraph",
-            "content": [
-              {
-                "type": "text",
-                "text": "hello"
-              },
-              {
-                "type": "hard_break"
-              },
-              {
-                "type": "text",
-                "text": "there"
-              }
-            ]
-          }
-        ]
-      },
       "expected": {
         "type": "doc",
         "content": [
@@ -98,32 +77,6 @@
           "type": "paragraph"
         }
       ],
-      "output": {
-        "type": "doc",
-        "content": [
-          {
-            "type": "paragraph",
-            "content": [
-              {
-                "type": "text",
-                "text": "one"
-              }
-            ]
-          },
-          {
-            "type": "paragraph"
-          },
-          {
-            "type": "paragraph",
-            "content": [
-              {
-                "type": "text",
-                "text": "two"
-              }
-            ]
-          }
-        ]
-      },
       "expected": {
         "type": "doc",
         "content": [
@@ -188,29 +141,6 @@
       },
       "from": 5,
       "to": 10,
-      "output": {
-        "type": "doc",
-        "content": [
-          {
-            "type": "paragraph",
-            "content": [
-              {
-                "type": "text",
-                "text": "one"
-              }
-            ]
-          },
-          {
-            "type": "paragraph",
-            "content": [
-              {
-                "type": "text",
-                "text": "three"
-              }
-            ]
-          }
-        ]
-      },
       "expected": {
         "type": "doc",
         "content": [
@@ -254,20 +184,6 @@
       },
       "from": 5,
       "to": 7,
-      "output": {
-        "type": "doc",
-        "content": [
-          {
-            "type": "paragraph",
-            "content": [
-              {
-                "type": "text",
-                "text": "hellyou"
-              }
-            ]
-          }
-        ]
-      },
       "expected": {
         "type": "doc",
         "content": [
@@ -276,7 +192,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "heyou"
+                "text": "hellyou"
               }
             ]
           }

@@ -220,7 +220,10 @@ impl DynamicSchema {
             for g in &groups_list { node_groups.entry(g.clone()).or_default().push(idx); }
             node_type_map.insert(name.clone(), idx);
             node_types_data.push(DynamicNodeTypeData {
-                name: name.clone(), inline: node_spec.inline, atom: node_spec.atom,
+                name: name.clone(),
+                // Text nodes are always inline in ProseMirror, even without explicit `inline: true`
+                inline: node_spec.inline || name == "text",
+                atom: node_spec.atom,
                 textblock: is_textblock, has_inline_content, content_expr_idx,
                 groups: groups_list, attrs, allowed_marks,
             });

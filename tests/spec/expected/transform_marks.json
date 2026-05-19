@@ -1,7 +1,7 @@
 {
   "cases": [
     {
-      "label": "should add a mark",
+      "label": "can add a mark",
       "type": "addMark",
       "input": {
         "type": "doc",
@@ -20,33 +20,6 @@
       "from": 7,
       "to": 12,
       "mark": "strong",
-      "output": {
-        "type": "doc",
-        "content": [
-          {
-            "type": "paragraph",
-            "content": [
-              {
-                "type": "text",
-                "text": "hello "
-              },
-              {
-                "type": "text",
-                "marks": [
-                  {
-                    "type": "strong"
-                  }
-                ],
-                "text": "there"
-              },
-              {
-                "type": "text",
-                "text": "!"
-              }
-            ]
-          }
-        ]
-      },
       "expected": {
         "type": "doc",
         "content": [
@@ -97,28 +70,9 @@
           }
         ]
       },
-      "from": 26,
-      "to": 27,
+      "from": 25,
+      "to": 26,
       "mark": "code",
-      "output": {
-        "type": "doc",
-        "content": [
-          {
-            "type": "blockquote",
-            "content": [
-              {
-                "type": "paragraph",
-                "content": [
-                  {
-                    "type": "text",
-                    "text": "the variable is called i"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
       "expected": {
         "type": "doc",
         "content": [
@@ -173,38 +127,6 @@
       "from": 7,
       "to": 12,
       "mark": "em",
-      "output": {
-        "type": "doc",
-        "content": [
-          {
-            "type": "paragraph",
-            "content": [
-              {
-                "type": "text",
-                "marks": [
-                  {
-                    "type": "em"
-                  }
-                ],
-                "text": "hello "
-              },
-              {
-                "type": "text",
-                "text": "world"
-              },
-              {
-                "type": "text",
-                "marks": [
-                  {
-                    "type": "em"
-                  }
-                ],
-                "text": "!"
-              }
-            ]
-          }
-        ]
-      },
       "expected": {
         "type": "doc",
         "content": [
