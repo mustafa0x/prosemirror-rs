@@ -33,6 +33,70 @@ impl<S: Schema> Fragment<S> {
     /// Reference to an empty fragment
     pub const EMPTY_REF: &'static Self = &Self::EMPTY;
 
+    /// Slice a fragment by child index (no node splitting).
+    pub fn cut_by_index(&self, from: usize, to: usize) -> Self {
+        if from == to {
+            return Fragment::new();
+        }
+        if from == 0 && to == self.inner.len() {
+            return self.clone();
+        }
+        Fragment::from(self.inner[from..to].to_vec())
+    }
+
+    /// Prepend a single node to this fragment.
+    pub fn add_to_start(&self, node: S::Node) -> Self {
+        let node_size = node.node_size();
+        let mut new_inner = Vec::with_capacity(self.inner.len() + 1);
+        new_inner.push(node);
+        new_inner.extend_from_slice(&self.inner);
+        Fragment {
+            size: self.size + node_size,
+            inner: new_inner,
+        }
+    }
+
+    /// Append a single node to this fragment.
+    pub fn add_to_end(&self, node: S::Node) -> Self {
+        let node_size = node.node_size();
+        let mut new_inner = self.inner.clone();
+        new_inner.push(node);
+        Fragment {
+            inner: new_inner,
+            size: self.size + node_size,
+        }
+    }
+
+    /// Iterate over children calling `f(node, offset, index)`.
+    pub fn for_each<F: FnMut(&S::Node, usize, usize)>(&self, mut f: F) {
+        let mut pos = 0;
+        for (i, child) in self.inner.iter().enumerate() {
+            f(child, pos, i);
+            pos += child.node_size();
+        }
+    }
+
+    /// Get the node at the given document position within this fragment.
+    /// Walks down the tree until finding the node that covers the position.
+    pub fn node_at(&self, pos: usize) -> Option<&S::Node> {
+        let mut remaining = pos;
+        for child in &self.inner {
+            let end = child.node_size();
+            if end > remaining {
+                if child.is_leaf() || remaining == 0 {
+                    return Some(child);
+                }
+                // For non-leaf nodes, descend into content (skip the opening token)
+                if let Some(content) = child.content() {
+                    return content.node_at(remaining - 1);
+                }
+                return Some(child);
+            }
+            remaining -= end;
+        }
+        None
+    }
+
     /// Create a new empty fragment
     pub fn new() -> Self {
         Self::default()
@@ -207,7 +271,7 @@ impl<S: Schema> Fragment<S> {
     }
 
     /// Create a new fragment in which the node at the given index is replaced by the given node.
-    pub fn replace_child(&self, index: usize, node: S::Node) -> Cow<Self> {
+    pub fn replace_child(&self, index: usize, node: S::Node) -> Cow<'_, Self> {
         let (before, rest) = self.inner.split_at(index);
         let (current, after) = rest.split_first().unwrap();
 

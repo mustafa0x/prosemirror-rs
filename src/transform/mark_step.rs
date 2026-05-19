@@ -1,4 +1,7 @@
-use super::{util::Span, StepKind};
+use super::map::{Mappable, StepMap};
+use super::step::StepKind;
+use super::util::Span;
+use super::StepResult;
 use crate::model::{Fragment, Mark, MarkSet, Node, NodeType, Schema, Slice};
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
@@ -38,7 +41,7 @@ where
 
 /// Adding a mark on some part of the document
 #[derive(Derivative, Deserialize, Serialize)]
-#[derivative(Debug(bound = ""), PartialEq(bound = ""), Eq(bound = ""))]
+#[derivative(Debug(bound = ""), PartialEq(bound = ""), Eq(bound = ""), Clone(bound = ""))]
 #[serde(bound = "", rename_all = "camelCase")]
 pub struct AddMarkStep<S: Schema> {
     /// The affected part of the document
@@ -50,7 +53,7 @@ pub struct AddMarkStep<S: Schema> {
 
 /// Removing a mark on some part of the document
 #[derive(Derivative, Deserialize, Serialize)]
-#[derivative(Debug(bound = ""), PartialEq(bound = ""), Eq(bound = ""))]
+#[derivative(Debug(bound = ""), PartialEq(bound = ""), Eq(bound = ""), Clone(bound = ""))]
 #[serde(bound = "", rename_all = "camelCase")]
 pub struct RemoveMarkStep<S: Schema> {
     /// The affected part of the document
@@ -80,14 +83,58 @@ impl<S: Schema> StepKind<S> for AddMarkStep<S> {
         );
 
         let slice = Slice::new(new_content, old_slice.open_start, old_slice.open_end);
-        // TODO: Cow::Owned?
         let new_node = doc.replace(self.span.from..self.span.to, &slice)?;
         Ok(new_node)
+    }
+
+    fn get_map(&self) -> StepMap {
+        StepMap::EMPTY
+    }
+
+    fn invert(&self, _doc: &S::Node) -> super::Step<S> {
+        super::Step::RemoveMark(RemoveMarkStep {
+            span: self.span,
+            mark: self.mark.clone(),
+        })
+    }
+
+    fn map<M: Mappable>(&self, mapping: &M) -> Option<super::Step<S>> {
+        let from = mapping.map_result(self.span.from, 1);
+        let to = mapping.map_result(self.span.to, -1);
+        if (from.deleted() && to.deleted()) || from.pos > to.pos {
+            return None;
+        }
+        Some(super::Step::AddMark(AddMarkStep {
+            span: Span {
+                from: from.pos,
+                to: to.pos,
+            },
+            mark: self.mark.clone(),
+        }))
+    }
+
+    fn merge(&self, other: &super::Step<S>) -> Option<super::Step<S>> {
+        match other {
+            super::Step::AddMark(other) if other.mark == self.mark => {
+                if self.span.from <= other.span.to && self.span.to >= other.span.from {
+                    Some(super::Step::AddMark(AddMarkStep {
+                        span: Span {
+                            from: usize::min(self.span.from, other.span.from),
+                            to: usize::max(self.span.to, other.span.to),
+                        },
+                        mark: self.mark.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 }
 
 impl<S: Schema> StepKind<S> for RemoveMarkStep<S> {
-    fn apply(&self, doc: &S::Node) -> super::StepResult<S> {
+    fn apply(&self, doc: &S::Node) -> StepResult<S> {
         let old_slice = doc.slice(self.span.from..self.span.to, false)?;
 
         let new_content = map_fragment(&old_slice.content, &|node| {
@@ -98,5 +145,50 @@ impl<S: Schema> StepKind<S> for RemoveMarkStep<S> {
         let slice = Slice::new(new_content, old_slice.open_start, old_slice.open_end);
         let new_node = doc.replace(self.span.from..self.span.to, &slice)?;
         Ok(new_node)
+    }
+
+    fn get_map(&self) -> StepMap {
+        StepMap::EMPTY
+    }
+
+    fn invert(&self, _doc: &S::Node) -> super::Step<S> {
+        super::Step::AddMark(AddMarkStep {
+            span: self.span,
+            mark: self.mark.clone(),
+        })
+    }
+
+    fn map<M: Mappable>(&self, mapping: &M) -> Option<super::Step<S>> {
+        let from = mapping.map_result(self.span.from, 1);
+        let to = mapping.map_result(self.span.to, -1);
+        if (from.deleted() && to.deleted()) || from.pos > to.pos {
+            return None;
+        }
+        Some(super::Step::RemoveMark(RemoveMarkStep {
+            span: Span {
+                from: from.pos,
+                to: to.pos,
+            },
+            mark: self.mark.clone(),
+        }))
+    }
+
+    fn merge(&self, other: &super::Step<S>) -> Option<super::Step<S>> {
+        match other {
+            super::Step::RemoveMark(other) if other.mark == self.mark => {
+                if self.span.from <= other.span.to && self.span.to >= other.span.from {
+                    Some(super::Step::RemoveMark(RemoveMarkStep {
+                        span: Span {
+                            from: usize::min(self.span.from, other.span.from),
+                            to: usize::max(self.span.to, other.span.to),
+                        },
+                        mark: self.mark.clone(),
+                    }))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 }

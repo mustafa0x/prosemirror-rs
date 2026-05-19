@@ -19,9 +19,34 @@ pub struct MarkSet<S: Schema> {
 }
 
 impl<S: Schema> MarkSet<S> {
+    /// Create a new empty MarkSet
+    pub fn new() -> Self {
+        MarkSet { content: Vec::new() }
+    }
+
     /// Check whether the set contains this exact mark
     pub fn contains(&self, mark: &S::Mark) -> bool {
         self.content.contains(mark)
+    }
+
+    /// Check whether a mark of this type is in the set, returning it if so
+    pub fn is_in_set(&self, mark: &S::Mark) -> bool {
+        self.content.iter().any(|m| m.r#type() == mark.r#type())
+    }
+
+    /// The number of marks in this set
+    pub fn len(&self) -> usize {
+        self.content.len()
+    }
+
+    /// Whether this set is empty
+    pub fn is_empty(&self) -> bool {
+        self.content.is_empty()
+    }
+
+    /// Iterate over the marks in this set
+    pub fn iter(&self) -> std::slice::Iter<'_, S::Mark> {
+        self.content.iter()
     }
 
     /// Add a mark to the set
@@ -104,6 +129,11 @@ pub trait Mark<S: Schema<Mark = Self>>:
 {
     /// The type of this mark.
     fn r#type(&self) -> S::MarkType;
+
+    /// Check if a mark of this type is in the given set
+    fn is_in_set(&self, set: &MarkSet<S>) -> bool {
+        set.content.iter().any(|m| m.r#type() == self.r#type())
+    }
 
     /// Given a set of marks, create a new set which contains this one as well, in the right
     /// position. If this mark is already in the set, the set itself is returned. If any marks that

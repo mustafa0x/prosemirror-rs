@@ -41,6 +41,7 @@ impl<T> EitherOrBoth<T, T> {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn then_some<T>(b: bool, v: T) -> Option<T> {
     if b {
         Some(v)

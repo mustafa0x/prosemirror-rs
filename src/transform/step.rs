@@ -3,6 +3,8 @@ use derivative::Derivative;
 use displaydoc::Display;
 use thiserror::Error;
 
+use super::map::{Mappable, StepMap};
+
 /// Different ways a step application can fail
 #[derive(Derivative, Display, Error)]
 #[derivative(Debug(bound = ""))]
@@ -23,6 +25,10 @@ pub enum StepError<S: Schema> {
     Slice(#[from] SliceError),
     /// Insert error
     Insert(#[from] InsertError),
+    /// No node at the step's position
+    NoNodeAtPosition,
+    /// Invalid attribute value
+    InvalidAttr(String),
 }
 
 /// The result of [applying](#transform.Step.apply) a step. Contains either a
@@ -40,4 +46,23 @@ pub trait StepKind<S: Schema> {
     /// applied to this document, or indicates success by containing a
     /// transformed document.
     fn apply(&self, doc: &S::Node) -> StepResult<S>;
+
+    /// Returns the `StepMap` describing the position offset caused by this step.
+    /// Default implementation returns an empty map.
+    fn get_map(&self) -> StepMap {
+        StepMap::EMPTY
+    }
+
+    /// Returns the inverse of this step as applied to the document before the step.
+    fn invert(&self, doc: &S::Node) -> super::Step<S>;
+
+    /// Maps this step through a mapping. Returns `None` if the step was
+    /// rendered invalid (e.g. its target position was deleted).
+    fn map<M: Mappable>(&self, mapping: &M) -> Option<super::Step<S>>;
+
+    /// Attempts to merge this step with another step. Returns `None` if they
+    /// cannot be merged.
+    fn merge(&self, _other: &super::Step<S>) -> Option<super::Step<S>> {
+        None
+    }
 }

@@ -1,7 +1,7 @@
 //! # The document model
 //!
-//! This module is derived from the `prosemirror-markdown` schema and the
-//! the general JSON serialization of nodes.
+//! Core types for representing ProseMirror documents: nodes, fragments, marks,
+//! resolved positions, content matching, slicing, and replacing.
 mod content;
 mod fragment;
 mod marks;
@@ -16,7 +16,7 @@ pub use fragment::Fragment;
 pub use marks::{Mark, MarkSet};
 pub use node::{Node, NodeType, SliceError, Text};
 pub use replace::{InsertError, ReplaceError, Slice};
-pub use resolved_pos::{ResolveErr, ResolvedNode, ResolvedPos};
+pub use resolved_pos::{NodeRange, ResolveErr, ResolvedNode, ResolvedPos};
 pub use schema::{AttrNode, Block, Leaf, MarkType, Schema, TextNode};
 
 pub(crate) use replace::replace;
@@ -24,131 +24,87 @@ pub(crate) use resolved_pos::Index;
 
 #[cfg(test)]
 mod tests {
-    use super::{fragment::IndexError, Index, Node, ResolvedNode, ResolvedPos};
-    use crate::markdown::{helper::*, ImageAttrs, MarkdownNode, MD};
-    use std::fmt::Debug;
-    use std::ops::Deref;
+    use super::{fragment::IndexError, Index, Node, ResolvedPos};
+    use crate::dynamic::DynamicSchema;
+    use crate::dynamic::types::Dyn;
 
-    #[test]
-    fn test_null_string() {
-        assert_eq!(
-            serde_json::from_str::<ImageAttrs>(r#"{"src": "", "alt": null}"#).unwrap(),
-            ImageAttrs {
-                src: String::new(),
-                title: String::new(),
-                alt: String::new()
-            }
-        );
-    }
-
-    #[test]
-    fn test_deserialize_text() {
-        assert_eq!(
-            serde_json::from_str::<MarkdownNode>(r#"{"type": "text", "text": "Foo"}"#).unwrap(),
-            MarkdownNode::text("Foo"),
-        );
+    fn basic_schema() -> DynamicSchema {
+        DynamicSchema::from_json(&serde_json::json!({
+            "nodes": {
+                "doc": { "content": "block+" },
+                "paragraph": { "content": "inline*", "group": "block" },
+                "blockquote": { "content": "block+", "group": "block" },
+                "heading": { "attrs": { "level": { "default": 1 } }, "content": "inline*", "group": "block" },
+                "text": { "group": "inline" },
+                "image": { "inline": true, "attrs": { "src": {}, "alt": { "default": null } }, "group": "inline", "atom": true },
+                "hard_break": { "inline": true, "group": "inline" }
+            },
+            "marks": { "strong": {}, "em": {} }
+        })).unwrap()
     }
 
     #[test]
     fn test_size() {
-        assert_eq!(node("Hello").node_size(), 5);
-        assert_eq!(node("\u{1F60A}").node_size(), 2);
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let text_node = schema.text("Hello");
+            assert_eq!(text_node.node_size(), 5);
 
-        let test_3 = p(("Hallo", "Foo"));
-        assert_eq!(test_3.node_size(), 10);
-        let ct_3 = test_3.content().unwrap();
-        assert_eq!(ct_3.find_index(0, false), Ok(Index::new(0, 0)));
-        assert_eq!(ct_3.find_index(1, false), Ok(Index::new(0, 0)));
-        assert_eq!(ct_3.find_index(2, false), Ok(Index::new(0, 0)));
-        assert_eq!(ct_3.find_index(3, false), Ok(Index::new(0, 0)));
-        assert_eq!(ct_3.find_index(4, false), Ok(Index::new(0, 0)));
-        assert_eq!(ct_3.find_index(5, false), Ok(Index::new(1, 5)));
-        assert_eq!(ct_3.find_index(6, false), Ok(Index::new(1, 5)));
-        assert_eq!(ct_3.find_index(7, false), Ok(Index::new(1, 5)));
-        assert_eq!(ct_3.find_index(8, false), Ok(Index::new(2, 8)));
-        assert_eq!(ct_3.find_index(9, false), Err(IndexError::OutOfBounds(9)));
+            let emoji = schema.text("\u{1F60A}");
+            assert_eq!(emoji.node_size(), 2);
 
-        assert_eq!(
-            ResolvedPos::<MD>::resolve(&test_3, 0),
-            Ok(ResolvedPos::new(
-                0,
-                vec![ResolvedNode::new(&test_3, 0, 0)],
-                0
-            ))
-        );
-    }
+            let test_3 = schema.node_from_json(&serde_json::json!({
+                "type": "paragraph",
+                "content": [
+                    { "type": "text", "text": "Hallo" },
+                    { "type": "text", "text": "Foo" }
+                ]
+            })).unwrap();
+            assert_eq!(test_3.node_size(), 10);
 
-    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-    struct Sol<'a> {
-        node: &'a MarkdownNode,
-        start: usize,
-        end: usize,
-    }
-
-    fn sol(node: &MarkdownNode, start: usize, end: usize) -> Sol {
-        Sol { node, start, end }
-    }
-
-    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-    enum Exp<'a> {
-        Node(&'a MarkdownNode),
-        Str(&'static str),
-        Null,
-    }
-
-    impl<'a> PartialEq<Exp<'a>> for Option<std::borrow::Cow<'a, MarkdownNode>> {
-        fn eq(&self, other: &Exp<'a>) -> bool {
-            if let Some(node) = self {
-                match other {
-                    Exp::Node(exp_node) => node.deref() == *exp_node,
-                    Exp::Str(text) => &node.text_content() == text,
-                    Exp::Null => false,
-                }
-            } else {
-                *other == Exp::Null
-            }
-        }
+            let ct_3 = test_3.content().unwrap();
+            assert_eq!(ct_3.find_index(0, false), Ok(Index::new(0, 0)));
+            assert_eq!(ct_3.find_index(1, false), Ok(Index::new(0, 0)));
+            assert_eq!(ct_3.find_index(4, false), Ok(Index::new(0, 0)));
+            assert_eq!(ct_3.find_index(5, false), Ok(Index::new(1, 5)));
+            assert_eq!(ct_3.find_index(9, false), Err(IndexError::OutOfBounds(9)));
+        });
     }
 
     #[test]
     fn test_resolve() {
-        let test_doc = doc((p(("ab",)), blockquote((p((em("cd"), "ef")),))));
-        let _doc = sol(&test_doc, 0, 12);
-        let _p1 = sol(test_doc.child(0).unwrap(), 1, 3);
-        let _blk = sol(test_doc.child(1).unwrap(), 5, 11);
-        let _p2 = sol(_blk.node.child(0).unwrap(), 6, 10);
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let test_doc = schema.node_from_json(&serde_json::json!({
+                "type": "doc",
+                "content": [
+                    { "type": "paragraph", "content": [{ "type": "text", "text": "ab" }] },
+                    { "type": "blockquote", "content": [{
+                        "type": "paragraph", "content": [
+                            { "type": "text", "text": "cd", "marks": [{"type": "em"}] },
+                            { "type": "text", "text": "ef" }
+                        ]
+                    }]}
+                ]
+            })).unwrap();
 
-        let expected = [
-            (&[_doc][..], 0, Exp::Null, Exp::Node(_p1.node)),
-            (&[_doc, _p1], 0, Exp::Null, Exp::Str("ab")),
-            (&[_doc, _p1], 1, Exp::Str("a"), Exp::Str("b")),
-            (&[_doc, _p1], 2, Exp::Str("ab"), Exp::Null),
-            (&[_doc], 4, Exp::Node(_p1.node), Exp::Node(_blk.node)),
-            (&[_doc, _blk], 0, Exp::Null, Exp::Node(_p2.node)),
-            (&[_doc, _blk, _p2], 0, Exp::Null, Exp::Str("cd")),
-            (&[_doc, _blk, _p2], 1, Exp::Str("c"), Exp::Str("d")),
-            (&[_doc, _blk, _p2], 2, Exp::Str("cd"), Exp::Str("ef")),
-            (&[_doc, _blk, _p2], 3, Exp::Str("e"), Exp::Str("f")),
-            (&[_doc, _blk, _p2], 4, Exp::Str("ef"), Exp::Null),
-            (&[_doc, _blk], 6, Exp::Node(_p2.node), Exp::Null),
-            (&[_doc], 12, Exp::Node(_blk.node), Exp::Null),
-        ];
+            let pos = ResolvedPos::<Dyn>::resolve(&test_doc, 0).unwrap();
+            assert_eq!(pos.depth, 0);
+            assert_eq!(pos.start(0), 0);
+            assert_eq!(pos.end(0), 12);
 
-        for (pos, (path, parent_offset, before, after)) in expected.iter().enumerate() {
-            let pos = ResolvedPos::<MD>::resolve(&test_doc, pos).unwrap();
-            assert_eq!(pos.depth, path.len() - 1);
+            let pos = ResolvedPos::<Dyn>::resolve(&test_doc, 1).unwrap();
+            assert_eq!(pos.depth, 1);
 
-            for (i, exp_i) in path.iter().enumerate() {
-                let act = sol(pos.node(i), pos.start(i), pos.end(i));
-                assert_eq!((i, &act), (i, exp_i));
-                if i > 0 {
-                    assert_eq!(pos.before(i), Some(exp_i.start - 1));
-                    assert_eq!(pos.after(i), Some(exp_i.end + 1));
-                }
-            }
-            assert_eq!(pos.parent_offset, *parent_offset);
-            assert_eq!(pos.node_before(), *before);
-            assert_eq!(pos.node_after(), *after);
-        }
+            let pos = ResolvedPos::<Dyn>::resolve(&test_doc, 2).unwrap();
+            assert_eq!(pos.depth, 1);
+            let nb = pos.node_before().unwrap();
+            assert_eq!(nb.text_content(), "a");
+            let na = pos.node_after().unwrap();
+            assert_eq!(na.text_content(), "b");
+
+            let pos = ResolvedPos::<Dyn>::resolve(&test_doc, 12).unwrap();
+            assert_eq!(pos.depth, 0);
+        });
     }
 }

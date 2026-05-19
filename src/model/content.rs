@@ -30,4 +30,35 @@ pub trait ContentMatch<S: Schema>: Copy {
 
     /// Match a node type, returning a match after that node if successful.
     fn match_type(self, r#type: S::NodeType) -> Option<Self>;
+
+    /// Find the nodes that need to be inserted before `after` to reach a valid
+    /// accepting state. Returns `None` if no valid insertion exists.
+    fn fill_before(self, _after: &Fragment<S>, _to_end: bool, _start_index: usize) -> Option<Fragment<S>> {
+        None
+    }
+
+    /// Find the list of node types needed to wrap content so that `target` becomes valid.
+    fn find_wrapping(self, _target: S::NodeType) -> Option<Vec<S::NodeType>> {
+        None
+    }
+
+    /// Test whether two content match states share any possible next node type.
+    fn compatible(self, _other: Self) -> bool {
+        false
+    }
+
+    /// Whether this match state expects inline content.
+    fn inline_content(self) -> bool {
+        false
+    }
+
+    /// The number of outgoing edges from this DFA state.
+    fn edge_count(self) -> usize {
+        0
+    }
+
+    /// Get the nth outgoing edge from this DFA state, as a (node_type, next_state) pair.
+    fn edge(self, _n: usize) -> Option<(S::NodeType, Self)> {
+        None
+    }
 }

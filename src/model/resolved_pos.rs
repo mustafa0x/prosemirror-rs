@@ -60,10 +60,12 @@ impl<'a, S: Schema> fmt::Debug for ResolvedNode<'a, S> {
     Eq(bound = "")
 )]
 pub struct ResolvedPos<'a, S: Schema> {
-    pub(crate) pos: usize,
+    /// The position that was resolved
+    pub pos: usize,
     path: Vec<ResolvedNode<'a, S>>,
     pub(crate) parent_offset: usize,
-    pub(crate) depth: usize,
+    /// The depth of the deepest resolved ancestor
+    pub depth: usize,
 }
 
 impl<'a, S: Schema> ResolvedPos<'a, S> {
@@ -156,7 +158,7 @@ impl<'a, S: Schema> ResolvedPos<'a, S> {
 
     /// Get the node directly before the position, if any. If the position points into a text node,
     /// only the part of that node before the position is returned.
-    pub fn node_before(&self) -> Option<Cow<S::Node>> {
+    pub fn node_before(&self) -> Option<Cow<'_, S::Node>> {
         let index = self.index(self.depth);
         let d_off = self.pos - self.path.last().unwrap().before;
         if d_off > 0 {
@@ -173,7 +175,7 @@ impl<'a, S: Schema> ResolvedPos<'a, S> {
 
     /// Get the node directly after the position, if any. If the position points into a text node,
     /// only the part of that node after the position is returned.
-    pub fn node_after(&self) -> Option<Cow<S::Node>> {
+    pub fn node_after(&self) -> Option<Cow<'_, S::Node>> {
         let parent = self.parent();
         let index = self.index(self.depth);
         if index == parent.child_count() {
@@ -230,6 +232,148 @@ impl<'a, S: Schema> ResolvedPos<'a, S> {
             start += offset + 1;
         }
         Ok(ResolvedPos::new(pos, path, parent_offset))
+    }
+
+    /// Returns the active marks at the resolved position.
+    /// Filters out non-inclusive marks at the start/end of their spans.
+    pub fn marks(&self) -> Vec<S::Mark> {
+        let parent = self.parent();
+        let index = self.index(self.depth);
+        if parent.content().map_or(true, |c| c.size() == 0) {
+            return Vec::new();
+        }
+        if self.text_offset() > 0 {
+            return parent
+                .child(index)
+                .and_then(|c| c.marks())
+                .map(|m| m.iter().cloned().collect())
+                .unwrap_or_default();
+        }
+        let main = if index > 0 {
+            parent.maybe_child(index - 1)
+        } else {
+            None
+        };
+        let other = parent.maybe_child(index);
+        let (main, _other) = match (main, other) {
+            (Some(m), o) => (m, o),
+            (None, Some(o)) => (o, None),
+            _ => return Vec::new(),
+        };
+        let marks: Vec<S::Mark> = main
+            .marks()
+            .map(|m| m.iter().cloned().collect())
+            .unwrap_or_default();
+        marks
+    }
+
+    /// Returns marks that span across the range from this position to `end`.
+    pub fn marks_across(&self, _end: &ResolvedPos<S>) -> Option<Vec<S::Mark>> {
+        let after = self.parent().maybe_child(self.index(self.depth));
+        if after.is_none() || after.unwrap().is_inline() == false {
+            return None;
+        }
+        let marks: Vec<S::Mark> = after
+            .unwrap()
+            .marks()
+            .map(|m| m.iter().cloned().collect())
+            .unwrap_or_default();
+        Some(marks)
+    }
+
+    /// Find the nearest block ancestor that contains both this position and `other`.
+    pub fn block_range<'b>(
+        &'b self,
+        other: &'b ResolvedPos<'a, S>,
+        _pred: Option<fn(&S::Node) -> bool>,
+    ) -> Option<NodeRange<'a, S>> {
+        let other = if other.pos < self.pos { self } else { other };
+        let _this = if other.pos < self.pos { other } else { self };
+        let mut d = if self.parent().is_inline() || self.pos == other.pos {
+            self.depth.saturating_sub(1)
+        } else {
+            self.depth
+        };
+        loop {
+            if other.pos <= self.end(d) {
+                return Some(NodeRange::new(self.clone(), other.clone(), d));
+            }
+            if d == 0 {
+                break;
+            }
+            d -= 1;
+        }
+        None
+    }
+
+    /// Test whether two resolved positions have the same direct parent node.
+    pub fn same_parent(&self, other: &ResolvedPos<S>) -> bool {
+        self.pos - self.parent_offset == other.pos - other.parent_offset
+    }
+
+    /// Return the later of two resolved positions.
+    pub fn max<'b>(&'b self, other: &'b ResolvedPos<'a, S>) -> &'b ResolvedPos<'a, S> {
+        if other.pos > self.pos { other } else { self }
+    }
+
+    /// Return the earlier of two resolved positions.
+    pub fn min<'b>(&'b self, other: &'b ResolvedPos<'a, S>) -> &'b ResolvedPos<'a, S> {
+        if other.pos < self.pos { other } else { self }
+    }
+
+    /// Return the position at a given child index within the parent at the given depth.
+    pub fn pos_at_index(&self, index: usize, depth: Option<usize>) -> usize {
+        let depth = depth.unwrap_or(self.depth);
+        let node = self.node(depth);
+        let mut pos = if depth == 0 { 0 } else { self.path[depth - 1].before + 1 };
+        for i in 0..index {
+            pos += node.child(i).map(|c| c.node_size()).unwrap_or(0);
+        }
+        pos
+    }
+}
+
+/// A range between two resolved positions at a given depth.
+#[derive(Derivative)]
+#[derivative(Debug(bound = ""), Clone(bound = ""))]
+pub struct NodeRange<'a, S: Schema> {
+    /// The start resolved position
+    pub from: ResolvedPos<'a, S>,
+    /// The end resolved position
+    pub to: ResolvedPos<'a, S>,
+    /// The depth at which the range is defined
+    pub depth: usize,
+}
+
+impl<'a, S: Schema> NodeRange<'a, S> {
+    /// Create a new NodeRange
+    pub fn new(from: ResolvedPos<'a, S>, to: ResolvedPos<'a, S>, depth: usize) -> Self {
+        NodeRange { from, to, depth }
+    }
+
+    /// The start position of the range
+    pub fn start(&self) -> usize {
+        self.from.before(self.depth + 1).unwrap_or(0)
+    }
+
+    /// The end position of the range
+    pub fn end(&self) -> usize {
+        self.to.after(self.depth + 1).unwrap_or(0)
+    }
+
+    /// The parent node containing the range
+    pub fn parent(&self) -> &'a S::Node {
+        self.from.node(self.depth)
+    }
+
+    /// The start child index within the parent
+    pub fn start_index(&self) -> usize {
+        self.from.index(self.depth)
+    }
+
+    /// The end child index within the parent
+    pub fn end_index(&self) -> usize {
+        self.to.index_after(self.depth)
     }
 }
 

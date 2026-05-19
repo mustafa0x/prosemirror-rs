@@ -1,5 +1,5 @@
 use super::{
-    replace, util, ContentMatch, ContentMatchError, Fragment, MarkSet, ReplaceError, ResolveErr,
+    replace, util, ContentMatch, ContentMatchError, Fragment, Mark, MarkSet, ReplaceError, ResolveErr,
     ResolvedPos, Schema, Slice, TextNode,
 };
 use displaydoc::Display;
@@ -20,21 +20,18 @@ pub enum SliceError {
 
 /// This is the type that encodes a kind of node
 pub trait NodeType<S: Schema>: Copy + Clone + Debug + PartialEq + Eq {
-    /// ???
+    /// Whether two node types have compatible content
     fn compatible_content(self, other: Self) -> bool;
-    /// ???
+    /// Whether the given fragment is valid content for this node type
     fn valid_content(self, fragment: &Fragment<S>) -> bool;
 
     /// Check whether the given mark type is allowed in this node.
     fn allows_mark_type(self, mark_type: S::MarkType) -> bool;
 
-    /// ???
+    /// Get the content match for this node type
     fn content_match(self) -> S::ContentMatch;
 
     /// Check whether the given marks is allowed in this node.
-    ///
-    /// By default, marks are allowed in inline nodes and textblocks, i.e. nodes that
-    /// have inline content.
     fn allow_marks(self, marks: &MarkSet<S>) -> bool;
 
     /// True if this is an inline type.
@@ -43,6 +40,55 @@ pub trait NodeType<S: Schema>: Copy + Clone + Debug + PartialEq + Eq {
     }
     /// True if this is a block type
     fn is_block(self) -> bool;
+
+    /// The name of this node type (e.g. "paragraph", "heading")
+    fn name(self) -> &'static str {
+        ""
+    }
+
+    /// Whether this is an atom (leaf) type
+    fn is_atom(self) -> bool {
+        false
+    }
+
+    /// Whether this is a textblock type (a block that contains inline content)
+    fn is_textblock(self) -> bool {
+        false
+    }
+
+    /// Whether this type expects inline content
+    fn inline_content(self) -> bool {
+        false
+    }
+
+    /// Create a new node of this type with the given content and marks.
+    fn create_node(self, content: Option<&Fragment<S>>, marks: Option<&MarkSet<S>>) -> S::Node;
+
+    /// Create a new node of this type with JSON attributes, content, and marks.
+    /// This mirrors the JS `NodeType.create(attrs, content, marks)` API.
+    fn create(
+        self,
+        _attrs: serde_json::Value,
+        content: Option<&Fragment<S>>,
+        marks: Option<&MarkSet<S>>,
+    ) -> S::Node {
+        // Default: ignore attrs, delegate to create_node
+        self.create_node(content, marks)
+    }
+
+    /// Check whether a single node of the given type can replace a range at the given indices.
+    fn can_replace_with(self, from: usize, to: usize, node_type: S::NodeType) -> bool {
+        self.content_match()
+            .match_fragment_range(&Fragment::EMPTY, 0..from)
+            .and_then(|m| m.match_type(node_type))
+            .and_then(|m| m.match_fragment_range(&Fragment::EMPTY, to..))
+            .map_or(false, |m| m.valid_end())
+    }
+
+    /// Check whether the marks are allowed for this node type
+    fn allows_marks(self, marks: &MarkSet<S>) -> bool {
+        self.allow_marks(marks)
+    }
 }
 
 /// This class represents a node in the tree that makes up a ProseMirror document. So a document is
@@ -85,7 +131,7 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
     fn mark(&self, marks: MarkSet<S>) -> Self;
 
     /// Create a copy of this node with only the content between the given positions.
-    fn cut<R: RangeBounds<usize>>(&self, range: R) -> Cow<Self> {
+    fn cut<R: RangeBounds<usize>>(&self, range: R) -> Cow<'_, Self> {
         let from = util::from(&range);
 
         if let Some(TextNode { text, marks }) = self.text_node() {
@@ -174,7 +220,7 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
 
     /// Resolve the given position in the document, returning a struct with information about its
     /// context.
-    fn resolve(&self, pos: usize) -> Result<ResolvedPos<S>, ResolveErr> {
+    fn resolve(&self, pos: usize) -> Result<ResolvedPos<'_, S>, ResolveErr> {
         ResolvedPos::resolve(self, pos)
     }
 
@@ -225,6 +271,23 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
     /// Get the type of the node
     fn r#type(&self) -> S::NodeType;
 
+    /// Get this node's attributes as a JSON value.
+    /// Text nodes and nodes without attrs return `serde_json::Value::Null`.
+    fn attrs_json(&self) -> serde_json::Value {
+        serde_json::Value::Null
+    }
+
+    /// Get the node at the given document position.
+    /// Returns the node that covers the position (for non-text content positions,
+    /// returns the child node; for text positions, returns the text node).
+    fn node_at(&self, pos: usize) -> Option<&Self> {
+        if pos == 0 {
+            return Some(self);
+        }
+        let content = self.content()?;
+        content.node_at(pos)
+    }
+
     /// True when this is a block (non-inline node)
     fn is_block(&self) -> bool;
 
@@ -249,6 +312,11 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
             .content_match()
             .match_fragment_range(&self.content().unwrap_or(Fragment::EMPTY_REF), 0..index)
             .ok_or(ContentMatchError::InvalidContent)
+    }
+
+    /// Test whether a single node of the given type can replace the given range.
+    fn can_replace_with(&self, from: usize, to: usize, node_type: S::NodeType) -> bool {
+        self.r#type().can_replace_with(from, to, node_type)
     }
 
     /// Test whether replacing the range between `from` and `to` (by
@@ -290,6 +358,139 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
             Ok(false)
         }
     }
+
+    /// Get the last child of this node, or None if it has no children.
+    fn last_child(&self) -> Option<&S::Node> {
+        self.content().and_then(Fragment::last_child)
+    }
+
+    /// Get the text content between two positions. When `block_separator` is
+    /// given, it will be inserted whenever a new block node is started. When
+    /// `leaf_text` is given, it'll be inserted for leaf nodes.
+    fn text_between(
+        &self,
+        from: usize,
+        to: usize,
+        block_separator: Option<&str>,
+        leaf_text: Option<&str>,
+    ) -> String {
+        let mut result = String::new();
+        if let Some(c) = self.content() {
+            c.text_between(&mut result, true, from, to, block_separator, leaf_text);
+        }
+        result
+    }
+
+    /// Invoke a callback for all descendant nodes between `from` and `to`
+    fn nodes_between<F: FnMut(&S::Node, usize) -> bool>(&self, from: usize, to: usize, f: &mut F, offset: usize) {
+        if let Some(c) = self.content() {
+            c.nodes_between(from, to, f, offset);
+        }
+    }
+
+    /// Invoke a callback for all descendant nodes
+    fn descendants<F: FnMut(&S::Node, usize) -> bool>(&self, f: &mut F) {
+        let size = self.content_size();
+        self.nodes_between(0, size, f, 0);
+    }
+
+    /// Test whether this node's content matches another node's content
+    fn eq(&self, other: &S::Node) -> bool {
+        if self as *const _ == other as *const _ {
+            return true;
+        }
+        if self.r#type() != other.r#type() || self.marks() != other.marks() {
+            return false;
+        }
+        match (self.text_node(), other.text_node()) {
+            (Some(a), Some(b)) => a.text == b.text,
+            (Some(_), None) | (None, Some(_)) => false,
+            (None, None) => match (self.content(), other.content()) {
+                (Some(a), Some(b)) => a == b,
+                (None, None) => true,
+                _ => false,
+            },
+        }
+    }
+
+    /// Test whether this node has the same markup (type, attrs, marks) as another
+    fn same_markup(&self, other: &S::Node) -> bool {
+        self.r#type() == other.r#type() && self.marks() == other.marks()
+    }
+
+    /// Test whether a range of this node has the given mark type
+    fn range_has_mark(&self, from: usize, to: usize, mark_type: S::MarkType) -> bool {
+        let mut found = false;
+        self.nodes_between(from, to, &mut |node, _pos| {
+            if let Some(marks) = node.marks() {
+                for m in marks {
+                    if m.r#type() == mark_type {
+                        found = true;
+                        return false;
+                    }
+                }
+            }
+            true
+        }, 0);
+        found
+    }
+
+    /// Test whether another node's content could be appended to this node
+    fn can_append(&self, other: &S::Node) -> bool {
+        if other.child_count() == 0 {
+            return true;
+        }
+        if let (Some(mc), Some(oc)) = (self.content(), other.content()) {
+            self.r#type()
+                .content_match()
+                .match_fragment_range(mc, ..)
+                .and_then(|m| m.match_fragment_range(oc, ..))
+                .map_or(false, |m| m.valid_end())
+        } else {
+            false
+        }
+    }
+
+    /// Validate the content of this node against the schema. Returns Ok(()) or an error.
+    fn check(&self) -> Result<(), String> {
+        if let Some(c) = self.content() {
+            if !self.r#type().valid_content(c) {
+                return Err("Invalid content for node".to_string());
+            }
+            for child in c.children() {
+                child.check()?;
+            }
+        }
+        if let Some(marks) = self.marks() {
+            if !self.r#type().allow_marks(marks) {
+                return Err("Invalid marks for node".to_string());
+            }
+        }
+        Ok(())
+    }
+
+    /// Iterate over the node's children, calling `f` with each child node,
+    /// its offset, and its index.
+    fn for_each<F: FnMut(&S::Node, usize, usize)>(&self, f: &mut F) {
+        if let Some(c) = self.content() {
+            c.for_each(f);
+        }
+    }
+
+    /// True when this is an atom node (a leaf that should not be edited directly)
+    fn is_atom(&self) -> bool {
+        self.r#type().is_atom()
+    }
+
+    /// True when this is a textblock (a block node with inline content)
+    fn is_textblock(&self) -> bool {
+        self.r#type().is_textblock()
+    }
+
+    /// Whether this node has inline content
+    fn inline_content(&self) -> bool {
+        self.r#type().inline_content()
+    }
 }
 
 /// A string that stores its length in utf-16
@@ -320,14 +521,6 @@ impl Text {
         content.push_str(right);
         let len_utf16 = self.len_utf16 + other.len_utf16;
         Text { len_utf16, content }
-    }
-
-    #[cfg(feature = "cmark")]
-    pub(crate) fn remove_last_newline(&mut self) {
-        if let Some('\n') = self.content.chars().next_back() {
-            self.content.pop();
-            self.len_utf16 -= 1;
-        }
     }
 }
 
