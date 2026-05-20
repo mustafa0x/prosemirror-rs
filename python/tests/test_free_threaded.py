@@ -2,13 +2,21 @@
 """
 Concurrency test for prosemirror_rs under free-threaded CPython (3.13t+).
 
-Verifies three properties that matter when the GIL is absent:
+Background
+----------
+Without the GIL, multiple Python threads can call methods on the same
+Editor instance simultaneously.  PyO3's #[pyclass] uses a per-object
+RefCell to guard the Rust value.  When two threads race, the losing thread
+receives RuntimeError("Already borrowed" / "Already mutably borrowed")
+instead of a data race.  This is *correct and safe* behaviour — PyO3
+raises rather than corrupts.
 
-1. doc_json() (&self)  — multiple threads read concurrently, no corruption.
-2. apply_step() (&mut self) — PyO3's RwLock serialises concurrent writers;
-   every call either succeeds (True) or fails to apply (False), never panics.
-3. Mixed readers + writers — interleaved read/write access leaves the
-   document in a consistent, parseable state.
+What this test verifies
+-----------------------
+1. RuntimeError from borrow contention is the *only* exception that can
+   arise; no panics, no other errors, no data corruption.
+2. After all concurrent reads and writes finish, the document is still
+   well-formed JSON with the expected root type.
 
 Run manually with a free-threaded build:
     python3.13t python/tests/test_free_threaded.py
@@ -77,35 +85,44 @@ def test_concurrent_access():
 
     def read_worker():
         """
-        Calls doc_json() N_OPS times after all threads are ready.
-        Under free-threading, multiple read_workers run truly in parallel.
+        Calls doc_json() repeatedly.  Under free-threading, a concurrent
+        apply_step() may hold the exclusive borrow, in which case PyO3
+        raises RuntimeError("Already borrowed").  We catch that per-call
+        so the thread keeps running; any *other* exception is a real failure.
         """
         barrier.wait()
         try:
             for _ in range(N_OPS):
-                raw = editor.doc_json()
-                doc = json.loads(raw)
-                assert doc["type"] == "doc", (
-                    f"root type corrupted: got {doc['type']!r}"
-                )
+                try:
+                    raw = editor.doc_json()
+                    doc = json.loads(raw)
+                    assert doc["type"] == "doc", (
+                        f"root type corrupted: got {doc['type']!r}"
+                    )
+                except RuntimeError:
+                    # Borrow contention — expected under free-threaded Python.
+                    pass
         except Exception as exc:
             with err_lock:
                 errors.append(exc)
 
     def write_worker():
         """
-        Calls apply_step() N_OPS times after all threads are ready.
-        Under free-threading, PyO3's RwLock serialises concurrent &mut borrows,
-        so every call either applies cleanly (True) or is rejected by the step
-        logic (False) — it never panics or corrupts state.
+        Calls apply_step() repeatedly.  A concurrent read or write may hold
+        a conflicting borrow, causing RuntimeError("Already mutably borrowed"
+        / "Already borrowed").  We catch that per-call; any other exception
+        is a real failure.
         """
         barrier.wait()
         try:
             for _ in range(N_OPS):
-                # Return value (True/False) is intentionally ignored:
-                # the step may fail to apply if positions shifted, and
-                # that is fine — we are testing for absence of crashes.
-                editor.apply_step(STEP)
+                try:
+                    # Return value (True/False) intentionally ignored:
+                    # the step may also fail to apply if positions shifted.
+                    editor.apply_step(STEP)
+                except RuntimeError:
+                    # Borrow contention — expected under free-threaded Python.
+                    pass
         except Exception as exc:
             with err_lock:
                 errors.append(exc)
