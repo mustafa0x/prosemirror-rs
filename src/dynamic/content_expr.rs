@@ -193,7 +193,7 @@ pub fn parse_content_expr(
     }
 
     let mut lexer = Lexer::new(input);
-    let alternatives = parse_expr(&mut lexer)?;
+    let alternatives = parse_expr(&mut lexer, groups)?;
 
     // Build NFA then convert to DFA
     let nfa = build_nfa(&alternatives, groups)?;
@@ -201,14 +201,14 @@ pub fn parse_content_expr(
     Ok(dfa)
 }
 
-fn parse_expr(lexer: &mut Lexer) -> Result<Vec<Vec<ExprElement>>, ContentExprError> {
+fn parse_expr(lexer: &mut Lexer, groups: &HashMap<String, Vec<String>>) -> Result<Vec<Vec<ExprElement>>, ContentExprError> {
     let mut alternatives = Vec::new();
-    alternatives.push(parse_sequence(lexer)?);
+    alternatives.push(parse_sequence(lexer, groups)?);
 
     loop {
         match lexer.next_token()? {
             Token::Pipe => {
-                alternatives.push(parse_sequence(lexer)?);
+                alternatives.push(parse_sequence(lexer, groups)?);
             }
             Token::Eof => break,
             Token::CloseParen => {
@@ -223,7 +223,7 @@ fn parse_expr(lexer: &mut Lexer) -> Result<Vec<Vec<ExprElement>>, ContentExprErr
     Ok(alternatives)
 }
 
-fn parse_sequence(lexer: &mut Lexer) -> Result<Vec<ExprElement>, ContentExprError> {
+fn parse_sequence(lexer: &mut Lexer, groups: &HashMap<String, Vec<String>>) -> Result<Vec<ExprElement>, ContentExprError> {
     let mut elements = Vec::new();
     loop {
         let saved = lexer.pos;
@@ -233,7 +233,9 @@ fn parse_sequence(lexer: &mut Lexer) -> Result<Vec<ExprElement>, ContentExprErro
                     "inline" => ExprAtom::Inline,
                     "block" => ExprAtom::Block,
                     _ => {
-                        if name.chars().next().map_or(false, |c| c.is_uppercase()) {
+                        if name.chars().next().map_or(false, |c| c.is_uppercase())
+                            || groups.contains_key(&name)
+                        {
                             ExprAtom::Group(name)
                         } else {
                             ExprAtom::Name(name)
@@ -244,7 +246,7 @@ fn parse_sequence(lexer: &mut Lexer) -> Result<Vec<ExprElement>, ContentExprErro
                 elements.push(ExprElement { atom, quantifier });
             }
             Token::OpenParen => {
-                let inner = parse_expr(lexer)?;
+                let inner = parse_expr(lexer, groups)?;
                 match lexer.next_token()? {
                     Token::CloseParen => {}
                     _ => return Err(ContentExprError::MismatchedParens),
