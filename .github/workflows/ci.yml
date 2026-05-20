@@ -17,7 +17,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: tests/spec/js/package-lock.json
 
@@ -95,3 +95,41 @@ jobs:
 
           print("OK:", out)
           EOF
+
+  test-python-free-threaded:
+    name: Python Free-threaded (3.13t)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13 free-threaded
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13t'
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build and install wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          args: --release --out dist
+
+      - name: Install package
+        run: pip install prosemirror-rs --find-links python/dist --force-reinstall
+
+      - name: Verify GIL is disabled and run concurrency test
+        run: |
+          python - <<'EOF'
+          import sys
+          assert hasattr(sys, "_is_gil_enabled"), "Expected Python 3.12+"
+          assert not sys._is_gil_enabled(), (
+              f"GIL is unexpectedly enabled on {sys.version}. "
+              "Ensure the free-threaded build is installed and that no "
+              "imported extension re-enabled it."
+          )
+          print(f"GIL disabled confirmed on {sys.version}")
+          EOF
+          python python/tests/test_free_threaded.py

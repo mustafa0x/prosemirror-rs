@@ -219,6 +219,14 @@ impl Editor {
 /// Provides a memory- and CPU-efficient interface to ProseMirror's document
 /// model and transform pipeline.  Document state lives entirely in Rust; only
 /// JSON strings cross the Python/Rust boundary.
+///
+/// Free-threaded safety (Python 3.13t+):
+/// - `doc_json()` takes `&self` and may be called concurrently from any number
+///   of threads without synchronisation.
+/// - `apply_step/apply_steps*()` take `&mut self`; PyO3's RwLock serialises
+///   concurrent callers automatically under the free-threaded build.
+/// - `with_types()` uses a thread-local, so each OS thread has its own
+///   isolated context — no cross-thread sharing occurs.
 #[pymodule]
 fn prosemirror_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Editor>()?;
