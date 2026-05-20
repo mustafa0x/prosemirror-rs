@@ -1,0 +1,28 @@
+{
+  "name": "prosemirror-rs",
+  "version": "0.3.0",
+  "description": "Node.js bindings for prosemirror-rs: a Rust implementation of ProseMirror's document model and transform pipeline",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "cargo build --release && node copy-artifact.mjs",
+    "test": "npm run build && node --test tests/editor.test.js"
+  },
+  "keywords": [
+    "prosemirror",
+    "collaborative-editing",
+    "editor",
+    "document",
+    "napi",
+    "rust"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fiduswriter/prosemirror-rs"
+  },
+  "homepage": "https://github.com/fiduswriter/prosemirror-rs#readme",
+  "engines": {
+    "node": ">=18"
+  }
+}

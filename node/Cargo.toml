@@ -1,0 +1,27 @@
+[package]
+name = "prosemirror-rs-node"
+version = "0.3.0"
+authors = [
+    "Johannes Wilm <johannes@fiduswriter.org>",
+    "Daniel Seiler <me@dseiler.eu>",
+]
+edition = "2021"
+license = "MIT"
+description = "Node.js bindings for prosemirror-rs"
+repository = "https://github.com/fiduswriter/prosemirror-rs"
+homepage = "https://github.com/fiduswriter/prosemirror-rs"
+# This crate is published via npm/napi-rs, not crates.io
+publish = false
+
+[lib]
+name = "prosemirror_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "2", features = ["napi4"] }
+napi-derive = "2"
+prosemirror = { path = ".." }
+serde_json = "1"
+
+[build-dependencies]
+napi-build = "2"
