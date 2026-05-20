@@ -51,6 +51,40 @@ cargo test --lib
 cargo test test_resolve
 ```
 
+## Performance
+
+The Rust implementation is significantly faster and more memory-efficient than
+the pure-Python `prosemirror` package.  Benchmark results from fiduswriter
+(2000 documents × 500 steps each):
+
+```
+────────────────────────────────────────────────────────────
+Backend   : python
+Documents : 2000   Steps/doc : 500
+Wall time : 12.347 s
+CPU time  : 12.340 s
+Memory Δ  : +1973.9 MB
+
+────────────────────────────────────────────────────────────
+Backend   : rust
+Documents : 2000   Steps/doc : 500
+Wall time : 6.047 s
+CPU time  : 6.040 s
+Memory Δ  : +22.1 MB
+
+============================================================
+COMPARISON  (Rust vs Python)
+============================================================
+Wall time  : 0.49× (faster)
+CPU time   : 0.49× (faster)
+Memory Δ   : 0.01× (faster)
+============================================================
+```
+
+The native bindings (Python and Node.js) share the same underlying Rust
+engine, so similar gains apply regardless of which language you use to
+integrate with prosemirror-rs.
+
 ## Architecture
 
 The crate has three main modules:
@@ -283,8 +317,8 @@ Once the files are updated and committed, push an annotated tag to trigger
 the publish workflow:
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.3.2
+git push origin v0.3.2
 ```
 
 ## Credits
