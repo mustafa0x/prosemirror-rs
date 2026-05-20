@@ -263,6 +263,28 @@ The test suite is structured as:
 - **No DOM parsing/serialization** — Server-side crate; HTML round-trip is
   not included.
 
+## Releasing a new version
+
+Before tagging a release, bump the version number in **all three** of these
+files to the same new version string (e.g. `0.3.0`):
+
+| File | Key |
+|------|-----|
+| [`Cargo.toml`](Cargo.toml) | `[package] version` — the Rust crate published to crates.io |
+| [`python/Cargo.toml`](python/Cargo.toml) | `[package] version` — the native extension built by maturin |
+| [`python/pyproject.toml`](python/pyproject.toml) | `[project] version` — the Python package published to PyPI |
+
+All three must be kept in sync; mismatches will cause the published artefacts
+to report different version numbers.
+
+Once the files are updated and committed, push an annotated tag to trigger
+the publish workflow:
+
+```bash
+git tag v0.3.0
+git push origin v0.3.0
+```
+
 ## Credits
 
 This crate was originally created by **Daniel Seiler**
