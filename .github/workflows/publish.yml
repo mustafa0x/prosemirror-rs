@@ -166,6 +166,8 @@ jobs:
       - name: Copy artifact
         working-directory: node
         run: node copy-artifact.mjs
+        env:
+          RUST_TARGET: ${{ matrix.rust-target }}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v7
