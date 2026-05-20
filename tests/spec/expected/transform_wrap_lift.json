@@ -1,0 +1,1098 @@
+{
+  "cases": [
+    {
+      "label": "can wrap in a blockquote",
+      "type": "replaceAround",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "one"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "two"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "three"
+              }
+            ]
+          }
+        ]
+      },
+      "step": {
+        "stepType": "replaceAround",
+        "from": 5,
+        "to": 10,
+        "gapFrom": 5,
+        "gapTo": 10,
+        "insert": 1,
+        "slice": {
+          "content": [
+            {
+              "type": "blockquote"
+            }
+          ]
+        },
+        "structure": true
+      },
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "one"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "two"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "three"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "can wrap two paragraphs",
+      "type": "replaceAround",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "one"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "two"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "three"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "four"
+              }
+            ]
+          }
+        ]
+      },
+      "step": {
+        "stepType": "replaceAround",
+        "from": 5,
+        "to": 17,
+        "gapFrom": 5,
+        "gapTo": 17,
+        "insert": 1,
+        "slice": {
+          "content": [
+            {
+              "type": "blockquote"
+            }
+          ]
+        },
+        "structure": true
+      },
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "one"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "two"
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "three"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "four"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "can wrap in a list",
+      "type": "replaceAround",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "one"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "two"
+              }
+            ]
+          }
+        ]
+      },
+      "step": {
+        "stepType": "replaceAround",
+        "from": 0,
+        "to": 10,
+        "gapFrom": 0,
+        "gapTo": 10,
+        "insert": 2,
+        "slice": {
+          "content": [
+            {
+              "type": "ordered_list",
+              "attrs": {
+                "order": 1
+              },
+              "content": [
+                {
+                  "type": "list_item"
+                }
+              ]
+            }
+          ]
+        },
+        "structure": true
+      },
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "ordered_list",
+            "attrs": {
+              "order": 1
+            },
+            "content": [
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "one"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "two"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "can wrap in a nested list",
+      "type": "replaceAround",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "ordered_list",
+            "attrs": {
+              "order": 1
+            },
+            "content": [
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "one"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "..."
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "two"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "three"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "four"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "step": {
+        "stepType": "replaceAround",
+        "from": 14,
+        "to": 26,
+        "gapFrom": 14,
+        "gapTo": 26,
+        "insert": 2,
+        "slice": {
+          "content": [
+            {
+              "type": "ordered_list",
+              "attrs": {
+                "order": 1
+              },
+              "content": [
+                {
+                  "type": "list_item"
+                }
+              ]
+            }
+          ]
+        },
+        "structure": true
+      },
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "ordered_list",
+            "attrs": {
+              "order": 1
+            },
+            "content": [
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "one"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "..."
+                      }
+                    ]
+                  },
+                  {
+                    "type": "ordered_list",
+                    "attrs": {
+                      "order": 1
+                    },
+                    "content": [
+                      {
+                        "type": "list_item",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "two"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "three"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "four"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "includes half-covered parent nodes",
+      "type": "replaceAround",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "one"
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "two"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "three"
+              }
+            ]
+          }
+        ]
+      },
+      "step": {
+        "stepType": "replaceAround",
+        "from": 0,
+        "to": 19,
+        "gapFrom": 0,
+        "gapTo": 19,
+        "insert": 1,
+        "slice": {
+          "content": [
+            {
+              "type": "blockquote"
+            }
+          ]
+        },
+        "structure": true
+      },
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "blockquote",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "one"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "two"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "three"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "can lift a block out of the middle of its parent",
+      "type": "replaceAround",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "one"
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "two"
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "three"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "step": {
+        "stepType": "replaceAround",
+        "from": 6,
+        "to": 11,
+        "gapFrom": 6,
+        "gapTo": 11,
+        "insert": 1,
+        "slice": {
+          "content": [
+            {
+              "type": "blockquote"
+            },
+            {
+              "type": "blockquote"
+            }
+          ],
+          "openStart": 1,
+          "openEnd": 1
+        },
+        "structure": true
+      },
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "one"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "two"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "three"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "can lift a block from the start of its parent",
+      "type": "replaceAround",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "two"
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "three"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "step": {
+        "stepType": "replaceAround",
+        "from": 0,
+        "to": 6,
+        "gapFrom": 1,
+        "gapTo": 6,
+        "insert": 0,
+        "slice": {
+          "content": [
+            {
+              "type": "blockquote"
+            }
+          ],
+          "openEnd": 1
+        },
+        "structure": true
+      },
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "two"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "three"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "can lift a block from the end of its parent",
+      "type": "replaceAround",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "one"
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "two"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "step": {
+        "stepType": "replaceAround",
+        "from": 6,
+        "to": 12,
+        "gapFrom": 6,
+        "gapTo": 11,
+        "insert": 1,
+        "slice": {
+          "content": [
+            {
+              "type": "blockquote"
+            }
+          ],
+          "openStart": 1
+        },
+        "structure": true
+      },
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "one"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "two"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "can lift a single child",
+      "type": "replaceAround",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "two"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "step": {
+        "stepType": "replaceAround",
+        "from": 0,
+        "to": 7,
+        "gapFrom": 1,
+        "gapTo": 6,
+        "insert": 0,
+        "structure": true
+      },
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "two"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "can lift multiple blocks",
+      "type": "replaceAround",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "blockquote",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "one"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "two"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "three"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "step": {
+        "stepType": "replaceAround",
+        "from": 1,
+        "to": 13,
+        "gapFrom": 2,
+        "gapTo": 12,
+        "insert": 0,
+        "structure": true
+      },
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "blockquote",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "one"
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "two"
+                  }
+                ]
+              },
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "three"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "can lift from a list",
+      "type": "replaceAround",
+      "input": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "bullet_list",
+            "content": [
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "one"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "two"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "three"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "step": {
+        "stepType": "replaceAround",
+        "from": 8,
+        "to": 15,
+        "gapFrom": 9,
+        "gapTo": 14,
+        "insert": 1,
+        "slice": {
+          "content": [
+            {
+              "type": "bullet_list"
+            },
+            {
+              "type": "bullet_list"
+            }
+          ],
+          "openStart": 1,
+          "openEnd": 1
+        },
+        "structure": true
+      },
+      "expected": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "bullet_list",
+            "content": [
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "one"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "two"
+              }
+            ]
+          },
+          {
+            "type": "bullet_list",
+            "content": [
+              {
+                "type": "list_item",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "three"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

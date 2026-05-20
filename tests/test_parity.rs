@@ -77,6 +77,11 @@ fn apply_operation(
             let pos = case["pos"].as_u64().unwrap() as usize;
             tr.split(pos, None, None);
         }
+        "replaceAround" => {
+            let step: prosemirror::transform::Step<Dyn> =
+                serde_json::from_value(case["step"].clone()).unwrap();
+            let _ = tr.step(step);
+        }
         "replace" => {
             let from = case["from"].as_u64().unwrap() as usize;
             let to = case["to"].as_u64().unwrap() as usize;
@@ -151,4 +156,9 @@ fn parity_transform_structure() {
 #[test]
 fn parity_replace() {
     run_parity_test("replace");
+}
+
+#[test]
+fn parity_transform_wrap_lift() {
+    run_parity_test("transform_wrap_lift");
 }

@@ -10,7 +10,7 @@
  */
 
 import { Schema, Fragment, Slice } from 'prosemirror-model';
-import { Transform } from 'prosemirror-transform';
+import { Transform, findWrapping, liftTarget } from 'prosemirror-transform';
 import { writeFileSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -369,6 +369,184 @@ function generateRoundtripTests() {
 }
 
 // ---------------------------------------------------------------------------
+// transform_wrap_lift.json  (wrap / lift via replaceAround steps)
+// ---------------------------------------------------------------------------
+
+function generateTransformWrapLiftTests() {
+  const cases = [];
+
+  // Helper: run wrap, capture the step and expected doc
+  function wrapTest(label, docNode, from, to, wrapType) {
+    const $from = docNode.resolve(from);
+    const $to   = docNode.resolve(to);
+    const range = $from.blockRange($to);
+    if (!range) throw new Error(`No blockRange for "${label}"`);
+    const wrapping = findWrapping(range, schema.nodes[wrapType]);
+    if (!wrapping) throw new Error(`No wrapping for "${label}"`);
+    const tr = new Transform(docNode);
+    tr.wrap(range, wrapping);
+    if (tr.steps.length === 0) throw new Error(`No steps for "${label}"`);
+    cases.push({
+      label,
+      type: 'replaceAround',
+      input: docNode.toJSON(),
+      step: tr.steps[0].toJSON(),
+      expected: tr.doc.toJSON(),
+    });
+  }
+
+  // Helper: run lift, capture the step and expected doc
+  function liftTest(label, docNode, from, to) {
+    const $from = docNode.resolve(from);
+    const $to   = docNode.resolve(to);
+    const range = $from.blockRange($to);
+    if (!range) throw new Error(`No blockRange for "${label}"`);
+    const target = liftTarget(range);
+    if (target == null) throw new Error(`No liftTarget for "${label}"`);
+    const tr = new Transform(docNode);
+    tr.lift(range, target);
+    if (tr.steps.length === 0) throw new Error(`No steps for "${label}"`);
+    cases.push({
+      label,
+      type: 'replaceAround',
+      input: docNode.toJSON(),
+      step: tr.steps[0].toJSON(),
+      expected: tr.doc.toJSON(),
+    });
+  }
+
+  // ---- wrap tests (translated from prosemirror-transform test-trans.ts) ----
+  // Positions are calculated from document structure:
+  // p("one")=nodeSize 5 (1+3+1), p("two")=5, p("three")=7, p("four")=6, etc.
+
+  // "can wrap in a blockquote"
+  // doc: [p("one") p("two") p("three")]
+  // <a> = inside p("two"), before 't' = pos 6
+  wrapTest(
+    'can wrap in a blockquote',
+    schema.node('doc', {}, [p('one'), p('two'), p('three')]),
+    6, 6,
+    'blockquote'
+  );
+
+  // "can wrap two paragraphs"
+  // doc: [p("one") p("two") p("three") p("four")]
+  // <a>=6 (inside p("two")), <b>=11 (inside p("three"))
+  wrapTest(
+    'can wrap two paragraphs',
+    schema.node('doc', {}, [p('one'), p('two'), p('three'), p('four')]),
+    6, 11,
+    'blockquote'
+  );
+
+  // "can wrap in a list"
+  // doc: [p("one") p("two")]
+  // <a>=1 (inside p("one")), <b>=6 (inside p("two"))
+  wrapTest(
+    'can wrap in a list',
+    schema.node('doc', {}, [p('one'), p('two')]),
+    1, 6,
+    'ordered_list'
+  );
+
+  // "can wrap in a nested list"
+  // doc: ol( li(p("one")), li(p("..."), p("two"), p("three")), li(p("four")) )
+  // Positions inside li2: li2 opens at 8, p("...") at 9..14, p("two") at 14..19, p("three") at 19..26
+  // <a> = inside p("two") before 't' = 15, <b> = inside p("three") before 't' = 20
+  wrapTest(
+    'can wrap in a nested list',
+    schema.node('doc', {}, [
+      ol(li(p('one')), li(p('...'), p('two'), p('three')), li(p('four')))
+    ]),
+    15, 20,
+    'ordered_list'
+  );
+
+  // "includes half-covered parent nodes"
+  // doc: [blockquote(p("one"), p("two")), p("three")]
+  // bq content: p("one") at 1..6, p("two") at 6..11
+  // <a> = inside p("two"), after "two" = pos 10 (end of p("two") content inside bq)
+  // <b> = inside p("three"), after "three" = pos 18
+  wrapTest(
+    'includes half-covered parent nodes',
+    schema.node('doc', {}, [blockquote(p('one'), p('two')), p('three')]),
+    10, 18,
+    'blockquote'
+  );
+
+  // ---- lift tests (translated from prosemirror-transform test-trans.ts) ----
+
+  // "can lift a block out of the middle of its parent"
+  // doc: [bq(p("one"), p("two"), p("three"))]
+  // p("one") at bq-content positions 0..5, p("two") at 5..10
+  // absolute: bq opens at 0, p("one") at 1..6, p("two") at 6..11
+  // <a> = inside p("two") before 't' = pos 7
+  liftTest(
+    'can lift a block out of the middle of its parent',
+    schema.node('doc', {}, [blockquote(p('one'), p('two'), p('three'))]),
+    7, 7
+  );
+
+  // "can lift a block from the start of its parent"
+  // doc: [bq(p("two"), p("three"))]
+  // bq opens at 0, p("two") content starts at 2
+  // <a> = pos 2
+  liftTest(
+    'can lift a block from the start of its parent',
+    schema.node('doc', {}, [blockquote(p('two'), p('three'))]),
+    2, 2
+  );
+
+  // "can lift a block from the end of its parent"
+  // doc: [bq(p("one"), p("two"))]
+  // p("two") starts at 6, content at 7
+  // <a> = pos 7
+  liftTest(
+    'can lift a block from the end of its parent',
+    schema.node('doc', {}, [blockquote(p('one'), p('two'))]),
+    7, 7
+  );
+
+  // "can lift a single child"
+  // doc: [bq(p("two"))]
+  // bq opens at 0, p("two") content at 2
+  // <a> = pos 2
+  liftTest(
+    'can lift a single child',
+    schema.node('doc', {}, [blockquote(p('two'))]),
+    2, 2
+  );
+
+  // "can lift multiple blocks"
+  // doc: [bq(bq(p("one"), p("two")), p("three"))]
+  // outer bq opens at 0, inner bq at 1..13, p("one") at 2..7, p("two") at 7..12
+  // <a> = inside p("one"), after 'n' (on<a>e) = pos 5
+  // <b> = inside p("two"), after 'w' (tw<b>o) = pos 10
+  liftTest(
+    'can lift multiple blocks',
+    schema.node('doc', {}, [blockquote(blockquote(p('one'), p('two')), p('three'))]),
+    5, 10
+  );
+
+  // "can lift from a list"
+  // doc: [ul(li(p("one")), li(p("two")), li(p("three")))]
+  // ul opens at 0, li1 at 1..8, li2 at 8..15
+  //   li2 opens at 8, p("two") at 9..14, p("two") content at 10
+  // <a> = inside li2's p("two") = pos 10
+  liftTest(
+    'can lift from a list',
+    schema.node('doc', {}, [
+      schema.node('bullet_list', {}, [
+        li(p('one')), li(p('two')), li(p('three'))
+      ])
+    ]),
+    10, 10
+  );
+
+  save('transform_wrap_lift', { cases });
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -379,4 +557,5 @@ generateTransformStructureTests();
 generateReplaceTests();
 generateResolveTests();
 generateRoundtripTests();
+generateTransformWrapLiftTests();
 console.log('Done.');
