@@ -1,0 +1,32 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "prosemirror-rs"
+version = "0.2.0"
+description = "Python bindings for prosemirror-rs: a Rust implementation of ProseMirror's document model and transform pipeline"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+keywords = ["prosemirror", "collaborative-editing", "editor", "document"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Text Editors",
+    "Topic :: Internet :: WWW/HTTP",
+]
+
+[project.urls]
+Homepage = "https://github.com/fiduswriter/prosemirror-rs"
+Repository = "https://github.com/fiduswriter/prosemirror-rs"
+Documentation = "https://github.com/fiduswriter/prosemirror-rs#readme"
+
+[tool.maturin]
+# The native extension is placed inside the prosemirror_rs Python package,
+# so users do: from prosemirror_rs import Editor
+python-source = "python"
+module-name = "prosemirror_rs.prosemirror_rs"
+features = ["pyo3/extension-module"]

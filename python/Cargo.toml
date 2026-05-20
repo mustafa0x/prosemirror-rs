@@ -1,0 +1,23 @@
+[package]
+name = "prosemirror-python"
+version = "0.2.0"
+authors = [
+    "Johannes Wilm <johannes@fiduswriter.org>",
+    "Daniel Seiler <me@dseiler.eu>",
+]
+edition = "2021"
+license = "MIT"
+description = "Python bindings for prosemirror-rs"
+repository = "https://github.com/fiduswriter/prosemirror-rs"
+homepage = "https://github.com/fiduswriter/prosemirror-rs"
+# This crate is published via maturin/PyPI, not crates.io
+publish = false
+
+[lib]
+name = "prosemirror_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+prosemirror = { path = ".." }
+serde_json = "1"
