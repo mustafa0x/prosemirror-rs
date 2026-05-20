@@ -722,6 +722,21 @@ impl Node<Dyn> for DynamicNode {
 
     fn attrs_json(&self) -> serde_json::Value { self.attrs.clone() }
 
+    fn with_attr(&self, attr: &str, value: serde_json::Value) -> Self {
+        let mut new_attrs = match &self.attrs {
+            serde_json::Value::Object(map) => map.clone(),
+            _ => serde_json::Map::new(),
+        };
+        new_attrs.insert(attr.to_string(), value);
+        DynamicNode {
+            type_idx: self.type_idx,
+            type_name: self.type_name.clone(),
+            attrs: serde_json::Value::Object(new_attrs),
+            marks: self.marks.clone(),
+            inner: self.inner.clone(),
+        }
+    }
+
     fn node_size(&self) -> usize {
         match &self.inner {
             DynNodeInner::Text(tn) => tn.text.len_utf16(),

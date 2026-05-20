@@ -277,6 +277,13 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
         serde_json::Value::Null
     }
 
+    /// Create a new node with a single attribute set to the given value.
+    /// Other attributes are preserved.
+    fn with_attr(&self, _attr: &str, _value: serde_json::Value) -> Self {
+        // Default: nodes without attributes just return self unchanged.
+        self.copy(|c| c.clone())
+    }
+
     /// Get the node at the given document position.
     /// Returns the node that covers the position (for non-text content positions,
     /// returns the child node; for text positions, returns the text node).

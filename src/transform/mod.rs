@@ -65,7 +65,8 @@ impl<S: Schema> Step<S> {
             Self::RemoveMark(rm_step) => rm_step.apply(doc),
             Self::AddNodeMark(anm_step) => anm_step.apply(doc),
             Self::RemoveNodeMark(rnm_step) => rnm_step.apply(doc),
-            Self::Attr(_) | Self::DocAttr(_) => Err(StepError::NoNodeAtPosition),
+            Self::Attr(attr_step) => attr_step.apply(doc),
+            Self::DocAttr(da_step) => da_step.apply(doc),
         }
     }
 
@@ -127,8 +128,9 @@ impl<S: Schema> Step<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dynamic::DynamicSchema;
     use crate::dynamic::types::Dyn;
+    use crate::dynamic::{DynamicNode, DynamicSchema};
+    use crate::model::Node;
     use crate::model::{Fragment, Slice};
 
     fn basic_schema() -> DynamicSchema {
@@ -208,6 +210,194 @@ mod tests {
                 }
                 _ => panic!("Expected Replace variant"),
             }
+        });
+    }
+
+    #[test]
+    fn test_doc_attr_step_applies() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let doc = schema.node_from_json(&serde_json::json!({
+                "type": "doc",
+                "content": [{
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "hello"}]
+                }]
+            })).unwrap();
+
+            // Set a doc-level attribute
+            let step: Step<Dyn> = Step::DocAttr(DocAttrStep {
+                attr: "title".to_string(),
+                value: serde_json::Value::String("test document".to_string()),
+            });
+            let result = step.apply(&doc);
+            assert!(result.is_ok());
+            let new_doc: DynamicNode = result.unwrap();
+            let attrs = new_doc.attrs_json();
+            assert_eq!(attrs["title"], "test document");
+
+            // Verify content is preserved
+            assert_eq!(new_doc.content_size(), doc.content_size());
+            assert_eq!(new_doc.text_content(), "hello");
+        });
+    }
+
+    #[test]
+    fn test_doc_attr_step_replaces_attr() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let doc = schema.node_from_json(&serde_json::json!({
+                "type": "doc",
+                "content": [{
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "hello"}]
+                }]
+            })).unwrap();
+
+            // Set a doc-level attribute
+            let step1: Step<Dyn> = Step::DocAttr(DocAttrStep {
+                attr: "title".to_string(),
+                value: serde_json::Value::String("first".to_string()),
+            });
+            let doc: DynamicNode = step1.apply(&doc).unwrap();
+            assert_eq!(doc.attrs_json()["title"], "first");
+
+            // Replace it
+            let step2: Step<Dyn> = Step::DocAttr(DocAttrStep {
+                attr: "title".to_string(),
+                value: serde_json::Value::String("second".to_string()),
+            });
+            let doc: DynamicNode = step2.apply(&doc).unwrap();
+            assert_eq!(doc.attrs_json()["title"], "second");
+        });
+    }
+
+    #[test]
+    fn test_doc_attr_step_multiple_attrs() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let doc = schema.node_from_json(&serde_json::json!({
+                "type": "doc",
+                "content": [{
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "hello"}]
+                }]
+            })).unwrap();
+
+            // Set multiple doc-level attributes
+            let steps = vec![
+                ("documentstyle", serde_json::Value::String("elephant".to_string())),
+                ("tracked", serde_json::Value::Bool(false)),
+                ("citationstyle", serde_json::Value::String("apa".to_string())),
+                ("language", serde_json::Value::String("en-US".to_string())),
+                ("papersize", serde_json::Value::String("A4".to_string())),
+                ("template", serde_json::Value::String("Standard Article".to_string())),
+                ("import_id", serde_json::Value::String("standard-article".to_string())),
+            ];
+
+            let mut doc: DynamicNode = doc;
+            for (attr, value) in &steps {
+                let step: Step<Dyn> = Step::DocAttr(DocAttrStep {
+                    attr: attr.to_string(),
+                    value: value.clone(),
+                });
+                doc = step.apply(&doc).unwrap();
+            }
+
+            let attrs = doc.attrs_json();
+            assert_eq!(attrs["documentstyle"], "elephant");
+            assert_eq!(attrs["tracked"], false);
+            assert_eq!(attrs["citationstyle"], "apa");
+            assert_eq!(attrs["language"], "en-US");
+            assert_eq!(attrs["papersize"], "A4");
+            assert_eq!(attrs["template"], "Standard Article");
+            assert_eq!(attrs["import_id"], "standard-article");
+
+            // Content preserved
+            assert_eq!(doc.text_content(), "hello");
+        });
+    }
+
+    #[test]
+    fn test_doc_attr_step_complex_values() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let doc = schema.node_from_json(&serde_json::json!({
+                "type": "doc",
+                "content": [{
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "test"}]
+                }]
+            })).unwrap();
+
+            // Array value
+            let step: Step<Dyn> = Step::DocAttr(DocAttrStep {
+                attr: "languages".to_string(),
+                value: serde_json::json!(["en-US", "fr", "de"]),
+            });
+            let doc: DynamicNode = step.apply(&doc).unwrap();
+            assert_eq!(doc.attrs_json()["languages"][0], "en-US");
+
+            // Object value
+            let step: Step<Dyn> = Step::DocAttr(DocAttrStep {
+                attr: "copyright".to_string(),
+                value: serde_json::json!({"holder": false, "year": false, "freeToRead": true, "licenses": []}),
+            });
+            let doc: DynamicNode = step.apply(&doc).unwrap();
+            assert_eq!(doc.attrs_json()["copyright"]["freeToRead"], true);
+            assert_eq!(doc.attrs_json()["copyright"]["licenses"].as_array().unwrap().len(), 0);
+        });
+    }
+
+    #[test]
+    fn test_attr_step_applies_to_child_node() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let doc = schema.node_from_json(&serde_json::json!({
+                "type": "doc",
+                "content": [{
+                    "type": "heading",
+                    "attrs": {"level": 1},
+                    "content": [{"type": "text", "text": "title"}]
+                }]
+            })).unwrap();
+
+            // Change heading level from 1 to 2.
+            // Position 1 is the start of the heading (after doc open, before heading open).
+            let step: Step<Dyn> = Step::Attr(AttrStep {
+                pos: 1,
+                attr: "level".to_string(),
+                value: serde_json::json!(2),
+            });
+            let result = step.apply(&doc);
+            assert!(result.is_ok());
+            let new_doc: DynamicNode = result.unwrap();
+            let heading = new_doc.child(0).unwrap();
+            let attrs = heading.attrs_json();
+            assert_eq!(attrs["level"], 2);
+        });
+    }
+
+    #[test]
+    fn test_attr_step_invalid_position() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let doc = schema.node_from_json(&serde_json::json!({
+                "type": "doc",
+                "content": [{
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "hello"}]
+                }]
+            })).unwrap();
+
+            // Position 999 is out of bounds
+            let step: Step<Dyn> = Step::Attr(AttrStep {
+                pos: 999,
+                attr: "level".to_string(),
+                value: serde_json::json!(2),
+            });
+            let result = step.apply(&doc);
+            assert!(result.is_err());
         });
     }
 
