@@ -100,9 +100,13 @@ export declare class Editor {
      * passed to JavaScript.  Suitable for saving directly to a database without
      * creating any intermediate JS objects.
      *
+     * When `skipDefaults` is `true`, attributes whose value matches the
+     * schema-defined default are omitted from the output ("mini" JSON).
+     *
+     * @param skipDefaults If true, omit attributes that have default values.
      * @returns The current document as a compact JSON string.
      */
-    docJson(): string;
+    docJson(skipDefaults?: boolean): string;
 
     /**
      * Number of steps successfully applied since construction or last `reset()`.

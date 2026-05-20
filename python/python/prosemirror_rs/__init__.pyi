@@ -114,12 +114,18 @@ class Editor:
         """
         ...
 
-    def doc_json(self) -> str:
+    def doc_json(self, skip_defaults: bool = False) -> str:
         """Serialize the current document to a JSON string.
 
         Serialization happens entirely in Rust; only the resulting string is
         passed to Python.  Suitable for saving directly to a database without
         creating any intermediate Python dicts or lists.
+
+        When *skip_defaults* is ``True``, attributes whose value matches the
+        schema-defined default are omitted from the output ("mini" JSON).
+
+        Args:
+            skip_defaults: If True, omit attributes that have default values.
 
         Returns:
             The current document as a compact JSON string.
