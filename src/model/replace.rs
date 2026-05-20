@@ -148,7 +148,7 @@ fn insert_into<S: Schema>(
 pub enum ReplaceError<S: Schema> {
     /// Inserted content deeper than insertion position
     InsertTooDeep,
-    /// Inconsistent open depths
+    /// Inconsistent open depths (from depth {from_depth} open {open_start}, to depth {to_depth} open {open_end})
     #[allow(dead_code)]
     InconsistentOpenDepths {
         /// Depth at the start
