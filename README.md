@@ -273,8 +273,10 @@ files to the same new version string (e.g. `0.3.0`):
 | [`Cargo.toml`](Cargo.toml) | `[package] version` — the Rust crate published to crates.io |
 | [`python/Cargo.toml`](python/Cargo.toml) | `[package] version` — the native extension built by maturin |
 | [`python/pyproject.toml`](python/pyproject.toml) | `[project] version` — the Python package published to PyPI |
+| [`node/Cargo.toml`](node/Cargo.toml) | `[package] version` — the native extension built by cargo |
+| [`node/package.json`](node/package.json) | `version` — the npm package published to npm |
 
-All three must be kept in sync; mismatches will cause the published artefacts
+All five must be kept in sync; mismatches will cause the published artefacts
 to report different version numbers.
 
 Once the files are updated and committed, push an annotated tag to trigger
