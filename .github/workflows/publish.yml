@@ -43,6 +43,12 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Set up QEMU (for Linux aarch64 cross-compilation)
+        if: runner.os == 'Linux' && matrix.target == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - name: Build wheel
         uses: PyO3/maturin-action@v1
         with:
