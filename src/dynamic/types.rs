@@ -291,6 +291,96 @@ impl DynamicNode {
     pub fn recalc(&mut self, type_idx: usize) {
         self.type_idx = type_idx;
     }
+
+    /// Serialize this node to the standard ProseMirror JSON format.
+    ///
+    /// When `skip_defaults` is `true`, attributes whose value matches the
+    /// schema-defined default are omitted, matching ProseMirror's internal
+    /// `toJSON` behaviour for minimised output.
+    pub fn to_json(&self, skip_defaults: bool) -> serde_json::Value {
+        if skip_defaults {
+            self.to_mini_json()
+        } else {
+            // Use the serde Serialize impl
+            serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+        }
+    }
+
+    /// ProseMirror-style "mini" JSON: omit attributes that match their
+    /// schema-level defaults.
+    ///
+    /// Adapted from
+    /// https://github.com/ProseMirror/prosemirror-model/blob/6d970507cd0da48653d3b72f2731a71a144a364b/src/node.js#L340-L351
+    fn to_mini_json(&self) -> serde_json::Value {
+        let mut obj = serde_json::json!({ "type": self.type_name });
+
+        let attrs = if self.attrs.is_object() {
+            let map = self.attrs.as_object().unwrap();
+            // Query the schema for the default attribute values of this node type
+            let default_attrs = with_types(|store| {
+                    store.node_types.get(self.type_idx).map(|nt| nt.attrs.clone())
+                }).flatten().unwrap_or_default();
+
+            let mut non_default = serde_json::Map::new();
+            for (k, v) in map {
+                let is_default = default_attrs
+                    .get(k)
+                    .map(|default| default == v)
+                    .unwrap_or(false);
+                if !is_default {
+                    non_default.insert(k.clone(), v.clone());
+                }
+            }
+            if non_default.is_empty() {
+                None
+            } else {
+                Some(serde_json::Value::Object(non_default))
+            }
+        } else {
+            None
+        };
+
+        if let Some(attrs_val) = attrs {
+            obj.as_object_mut()
+                .unwrap()
+                .insert("attrs".to_string(), attrs_val);
+        }
+
+        // Content
+        match &self.inner {
+            DynNodeInner::Text(tn) => {
+                obj.as_object_mut()
+                    .unwrap()
+                    .insert("text".to_string(), serde_json::Value::String(tn.text.as_str().to_string()));
+            }
+            DynNodeInner::Element { content } => {
+                if content.child_count() > 0 {
+                    let children: Vec<serde_json::Value> = content
+                        .children()
+                        .iter()
+                        .map(|child| child.to_mini_json())
+                        .collect();
+                    obj.as_object_mut()
+                        .unwrap()
+                        .insert("content".to_string(), serde_json::Value::Array(children));
+                }
+            }
+        }
+
+        // Marks
+        let mini_marks: Vec<serde_json::Value> = self
+            .marks
+            .iter()
+            .map(|m| m.to_mini_json())
+            .collect();
+        if !mini_marks.is_empty() {
+            obj.as_object_mut()
+                .unwrap()
+                .insert("marks".to_string(), serde_json::Value::Array(mini_marks));
+        }
+
+        obj
+    }
 }
 
 impl PartialEq for DynamicNode {
@@ -413,6 +503,41 @@ pub struct DynamicMark {
     /// Attributes — omitted when null or empty so serialization matches ProseMirror JS output.
     #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub attrs: serde_json::Value,
+}
+
+impl DynamicMark {
+    /// ProseMirror-style "mini" JSON for marks: omit attributes that
+    /// match their schema-level defaults.
+    ///
+    /// Adapted from
+    /// https://github.com/ProseMirror/prosemirror-model/blob/6d970507cd0da48653d3b72f2731a71a144a364b/src/mark.js#L76-L83
+    fn to_mini_json(&self) -> serde_json::Value {
+        let mut obj = serde_json::json!({ "type": self.type_name });
+
+        if let serde_json::Value::Object(map) = &self.attrs {
+            let default_attrs = with_types(|store| {
+                    store.mark_types.iter().find(|mt| mt.name == self.type_name).map(|mt| mt.attrs.clone())
+                }).flatten().unwrap_or_default();
+
+            let mut non_default = serde_json::Map::new();
+            for (k, v) in map {
+                let is_default = default_attrs
+                    .get(k)
+                    .map(|default| default == v)
+                    .unwrap_or(false);
+                if !is_default {
+                    non_default.insert(k.clone(), v.clone());
+                }
+            }
+            if !non_default.is_empty() {
+                obj.as_object_mut()
+                    .unwrap()
+                    .insert("attrs".to_string(), serde_json::Value::Object(non_default));
+            }
+        }
+
+        obj
+    }
 }
 
 impl PartialEq for DynamicMark {

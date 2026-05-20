@@ -274,9 +274,15 @@ impl Editor {
     /// document directly to a database without creating any intermediate
     /// Python dicts or lists.
     ///
+    /// When `skip_defaults` is `True`, attributes whose value matches the
+    /// schema-defined default are omitted from the output ("mini" JSON).
+    ///
+    /// :param skip_defaults: If True, omit attributes that have default values.
     /// :returns: The document as a compact JSON string.
-    fn doc_json(&self) -> PyResult<String> {
-        serde_json::to_string(&self.doc)
+    #[pyo3(signature = (skip_defaults = false))]
+    fn doc_json(&self, skip_defaults: bool) -> PyResult<String> {
+        let val = self.schema.with_types(|| self.doc.to_json(skip_defaults));
+        serde_json::to_string(&val)
             .map_err(|e| PyValueError::new_err(format!("Serialization error: {e}")))
     }
 

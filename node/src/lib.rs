@@ -268,10 +268,15 @@ impl Editor {
     /// document directly to a database without creating any intermediate
     /// JS objects.
     ///
+    /// When `skipDefaults` is `true`, attributes whose value matches the
+    /// schema-defined default are omitted from the output ("mini" JSON).
+    ///
+    /// @param skipDefaults If true, omit attributes that have default values.
     /// @returns The document as a compact JSON string.
     #[napi]
-    pub fn doc_json(&self) -> napi::Result<String> {
-        serde_json::to_string(&self.doc)
+    pub fn doc_json(&self, skip_defaults: Option<bool>) -> napi::Result<String> {
+        let val = self.schema.with_types(|| self.doc.to_json(skip_defaults.unwrap_or(false)));
+        serde_json::to_string(&val)
             .map_err(|e| napi::Error::new(Status::GenericFailure, format!("Serialization error: {e}")))
     }
 

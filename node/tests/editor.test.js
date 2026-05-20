@@ -81,16 +81,96 @@ test('constructor throws when doc JSON is not a node object', () => {
 });
 
 // ---------------------------------------------------------------------------
-// docJson
+// docJson with skipDefaults
 // ---------------------------------------------------------------------------
 
-test('docJson returns a valid JSON string containing the initial text', () => {
-    const editor = new Editor(SCHEMA, DOC);
-    const raw = editor.docJson();
-    assert.equal(typeof raw, 'string');
-    const doc = JSON.parse(raw);
-    assert.equal(doc.type, 'doc');
-    assert.ok(raw.includes('hello'), `Expected "hello" in: ${raw}`);
+test('docJson() without argument includes all attributes', () => {
+    // Schema with attributes that have defaults
+    const schemaWithAttrs = JSON.stringify({
+        nodes: {
+            doc:       { content: 'paragraph+' },
+            paragraph: {
+                content: 'text*',
+                group: 'block',
+                attrs: { align: { default: 'left' }, indent: { default: 0 } },
+            },
+            text: { group: 'inline' },
+        },
+        marks: { strong: { attrs: { level: { default: 1 } } }, em: {} },
+    });
+
+    // Document with default attributes (should be included in regular serialization)
+    const docDefault = JSON.stringify({
+        type: 'doc',
+        content: [{
+            type: 'paragraph',
+            attrs: { align: 'left', indent: 0 },
+            content: [{
+                type: 'text',
+                text: 'hello',
+                marks: [{ type: 'strong', attrs: { level: 1 } }],
+            }],
+        }],
+    });
+
+    const editorDefault = new Editor(schemaWithAttrs, docDefault);
+
+    // Regular serialization should include all attrs
+    const fullRaw = editorDefault.docJson();
+    const full = JSON.parse(fullRaw);
+    assert.ok(fullRaw.includes('"attrs"'), `Expected attrs in full serialization: ${fullRaw}`);
+    assert.equal(full.content[0].attrs.align, 'left');
+    assert.equal(full.content[0].attrs.indent, 0);
+    assert.equal(full.content[0].content[0].marks[0].attrs.level, 1);
+
+    // Mini serialization should skip all default attributes
+    const miniRaw = editorDefault.docJson(true);
+    const mini = JSON.parse(miniRaw);
+    assert.ok(!miniRaw.includes('"attrs"'), `Expected no attrs in mini serialization: ${miniRaw}`);
+    assert.ok(!('attrs' in mini.content[0]), 'paragraph should have no attrs');
+    assert.ok(!('attrs' in mini.content[0].content[0].marks[0]), 'mark should have no attrs');
+
+    // Document with non-default attributes
+    const docCustom = JSON.stringify({
+        type: 'doc',
+        content: [{
+            type: 'paragraph',
+            attrs: { align: 'right', indent: 2 },
+            content: [{ type: 'text', text: 'world' }],
+        }],
+    });
+
+    const editorCustom = new Editor(schemaWithAttrs, docCustom);
+    const miniCustomRaw = editorCustom.docJson(true);
+    const miniCustom = JSON.parse(miniCustomRaw);
+    // Non-default attrs should still appear
+    assert.ok(miniCustomRaw.includes('"attrs"'), `Expected attrs for non-default values: ${miniCustomRaw}`);
+    assert.equal(miniCustom.content[0].attrs.align, 'right');
+    assert.equal(miniCustom.content[0].attrs.indent, 2);
+
+    // Mix of default and non-default
+    const docMixed = JSON.stringify({
+        type: 'doc',
+        content: [{
+            type: 'paragraph',
+            attrs: { align: 'center', indent: 0 },
+            content: [{ type: 'text', text: 'mixed' }],
+        }],
+    });
+
+    const editorMixed = new Editor(schemaWithAttrs, docMixed);
+    const miniMixedRaw = editorMixed.docJson(true);
+    const miniMixed = JSON.parse(miniMixedRaw);
+    // Only 'align' should be present (indent is default 0)
+    assert.ok(miniMixedRaw.includes('"attrs"'), `Expected attrs for partial non-default: ${miniMixedRaw}`);
+    assert.equal(miniMixed.content[0].attrs.align, 'center');
+    assert.ok(!('indent' in miniMixed.content[0].attrs), 'indent should be omitted (default value)');
+
+    // Verify backwards compatibility: no argument == false
+    const editorBC = new Editor(SCHEMA, DOC);
+    const noArg = editorBC.docJson();
+    const falseArg = editorBC.docJson(false);
+    assert.equal(noArg, falseArg, 'docJson() and docJson(false) should be identical');
 });
 
 // ---------------------------------------------------------------------------
