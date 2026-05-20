@@ -1,6 +1,6 @@
 [package]
 name = "prosemirror-rs-node"
-version = "0.3.6"
+version = "0.3.7"
 authors = [
     "Johannes Wilm <johannes@fiduswriter.org>",
     "Daniel Seiler <me@dseiler.eu>",
