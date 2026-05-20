@@ -144,9 +144,14 @@ impl Editor {
             })?
         };
 
-        // Snapshot the pre-batch state so we can roll back cheaply.
-        let snapshot = self.doc.clone();
-        let snapshot_version = self.version;
+        // A snapshot is only needed when there are at least two steps: with a
+        // single step the document is either untouched (failure) or cleanly
+        // advanced (success), so no previously-committed state can need rolling back.
+        let mut snapshot: Option<(DynamicNode, usize)> = if steps.len() > 1 {
+            Some((self.doc.clone(), self.version))
+        } else {
+            None
+        };
 
         // Phase 2: apply each step; roll back and return false on the first failure.
         for step in steps {
@@ -161,8 +166,13 @@ impl Editor {
                     self.version += 1;
                 }
                 Err(_) => {
-                    self.doc = snapshot;
-                    self.version = snapshot_version;
+                    // Option::take moves the contents out via &mut self rather
+                    // than an unconditional move, which the borrow checker would
+                    // reject inside a loop body.
+                    if let Some((snap_doc, snap_version)) = snapshot.take() {
+                        self.doc = snap_doc;
+                        self.version = snap_version;
+                    }
                     return Ok(false);
                 }
             }
@@ -204,9 +214,14 @@ impl Editor {
             })?
         };
 
-        // Snapshot the pre-batch state so we can roll back cheaply.
-        let snapshot = self.doc.clone();
-        let snapshot_version = self.version;
+        // A snapshot is only needed when there are at least two steps: with a
+        // single step the document is either untouched (failure) or cleanly
+        // advanced (success), so no previously-committed state can need rolling back.
+        let mut snapshot: Option<(DynamicNode, usize)> = if parsed.len() > 1 {
+            Some((self.doc.clone(), self.version))
+        } else {
+            None
+        };
 
         for step in parsed {
             let result = {
@@ -220,8 +235,10 @@ impl Editor {
                     self.version += 1;
                 }
                 Err(_) => {
-                    self.doc = snapshot;
-                    self.version = snapshot_version;
+                    if let Some((snap_doc, snap_version)) = snapshot.take() {
+                        self.doc = snap_doc;
+                        self.version = snap_version;
+                    }
                     return Ok(false);
                 }
             }
