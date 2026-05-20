@@ -25,7 +25,7 @@ Or from crates.io (when published):
 
 ```toml
 [dependencies]
-prosemirror = "0.1"
+prosemirror = "0.2"
 serde_json = "1"
 ```
 
@@ -263,6 +263,23 @@ The test suite is structured as:
 - **No DOM parsing/serialization** — Server-side crate; HTML round-trip is
   not included.
 
+## Credits
+
+This crate was originally created by **Daniel Seiler**
+([Xiphoseer](https://github.com/Xiphoseer), <me@dseiler.eu>), who designed and
+implemented the document model, transform pipeline, and runtime schema system.
+The project is now maintained by
+**Johannes Wilm** ([FidusWriter](https://github.com/fiduswriter),
+<johannes@fiduswriter.org>).
+
+The ProseMirror data model and step format are the work of
+**Marijn Haverbeke** and the ProseMirror contributors. See
+[prosemirror.net](https://prosemirror.net) for the upstream project.
+
 ## License
 
-MIT (original code) / MIT (JS upstream)
+MIT — see [LICENSE](LICENSE).
+
+Copyright 2026 Johannes Wilm  
+Copyright 2020 Daniel Seiler  
+Copyright 2015–2026 Marijn Haverbeke and others
