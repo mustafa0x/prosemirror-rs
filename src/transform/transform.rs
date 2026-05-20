@@ -179,12 +179,11 @@ impl<S: Schema> Transform<S> {
         if from == to && slice.size() == 0 {
             return self;
         }
-        let step = Step::Replace(ReplaceStep {
-            span: crate::transform::Span { from, to },
-            slice,
-            structure: false,
-        });
-        let _ = self.maybe_step(step);
+        // Use the smart Fitter so cross-depth replacements (e.g. inserting a block
+        // node into inline content) are handled correctly, matching the JS behaviour.
+        if let Some(step) = crate::transform::replace::replace_step(&self.doc, from, to, &slice) {
+            let _ = self.maybe_step(step);
+        }
         self
     }
 

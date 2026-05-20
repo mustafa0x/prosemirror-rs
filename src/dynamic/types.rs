@@ -410,8 +410,8 @@ pub struct DynamicMark {
     /// The mark type name
     #[serde(rename = "type")]
     pub type_name: String,
-    /// Attributes
-    #[serde(default)]
+    /// Attributes — omitted when null or empty so serialization matches ProseMirror JS output.
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub attrs: serde_json::Value,
 }
 
@@ -568,7 +568,11 @@ impl Node<Dyn> for DynamicNode {
 
     fn mark(&self, marks: MarkSet<Dyn>) -> Self {
         let mut node = self.clone();
-        node.marks = marks;
+        node.marks = marks.clone();
+        // Also update the inner TextNode's marks so that same_markup() stays consistent.
+        if let DynNodeInner::Text(ref mut tn) = node.inner {
+            tn.marks = marks;
+        }
         node
     }
 

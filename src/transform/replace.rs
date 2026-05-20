@@ -520,18 +520,55 @@ impl<S: Schema> Fitter<S> {
         if close.fit_fragment.child_count() > 0 {
             self.placed = add_to_fragment(&self.placed, close.depth, &close.fit_fragment);
         }
+
+        // Determine the effective target position after the close-level move.
+        // In JS this is `close.move`, which is either the original `$to` or a
+        // re-resolved position when `dropInner` is true.
+        let doc = unsafe { &*self.doc };
+        let move_to_opt: Option<ResolvedPos<S>>;
+        let move_to: &ResolvedPos<S> = if close.move_pos == to.pos {
+            to
+        } else {
+            move_to_opt = doc.resolve(close.move_pos).ok();
+            match move_to_opt.as_ref() {
+                Some(rp) => rp,
+                None => return None,
+            }
+        };
+
+        // Open new frontier nodes for each depth level between close.depth+1
+        // and move_to.depth.  This is the critical part that JS's Fitter does
+        // and was missing from the Rust port — without it, the trailing content
+        // (e.g. "you" after inserting a paragraph) has no open slot to merge
+        // into and gets incorrectly joined with the last slice node.
+        for d in (close.depth + 1)..=move_to.depth {
+            let node = move_to.node(d);
+            let index = move_to.index(d);
+            let fill = node
+                .r#type()
+                .content_match()
+                .fill_before(
+                    node.content().unwrap_or(Fragment::EMPTY_REF),
+                    true,
+                    index,
+                )
+                .unwrap_or_default();
+            let fill_opt = if fill.child_count() > 0 { Some(fill) } else { None };
+            self.open_frontier_node(node.r#type(), fill_opt);
+        }
+
         Some(CloseResult {
             pos: close.move_pos,
-            depth: to.depth,
+            depth: move_to.depth,
         })
     }
 
-    fn open_frontier_node(&mut self, type_: S::NodeType) {
+    fn open_frontier_node(&mut self, type_: S::NodeType, content: Option<Fragment<S>>) {
         let d = self.depth();
         if let Some(new_match) = self.frontier[d].match_.match_type(type_) {
             self.frontier[d].match_ = new_match;
         }
-        let node = type_.create_node(None, None);
+        let node = type_.create_node(content.as_ref(), None);
         self.placed = add_to_fragment(&self.placed, d, &Fragment::from(vec![node]));
         self.frontier.push(FrontierItem {
             node_type: type_,
