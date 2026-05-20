@@ -299,8 +299,16 @@ The test suite is structured as:
 
 ## Releasing a new version
 
-Before tagging a release, bump the version number in **all three** of these
-files to the same new version string (e.g. `0.3.0`):
+Before tagging a release, bump the version number in **all five** packaging
+files to the same new version string.  Use the helper script:
+
+```bash
+python scripts/bump-version.py        # show current versions
+python scripts/bump-version.py 0.4.0   # set all to 0.4.0
+python scripts/bump-version.py --check # exit 1 if they differ
+```
+
+The files it manages:
 
 | File | Key |
 |------|-----|
@@ -309,9 +317,6 @@ files to the same new version string (e.g. `0.3.0`):
 | [`python/pyproject.toml`](python/pyproject.toml) | `[project] version` — the Python package published to PyPI |
 | [`node/Cargo.toml`](node/Cargo.toml) | `[package] version` — the native extension built by cargo |
 | [`node/package.json`](node/package.json) | `version` — the npm package published to npm |
-
-All five must be kept in sync; mismatches will cause the published artefacts
-to report different version numbers.
 
 Once the files are updated and committed, push an annotated tag to trigger
 the publish workflow:
