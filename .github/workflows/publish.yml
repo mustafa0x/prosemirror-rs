@@ -115,26 +115,35 @@ jobs:
           - os: ubuntu-latest
             target: x86_64
             triple: linux-x64-gnu
+            rust-target: ''
           - os: ubuntu-latest
             target: aarch64
             triple: linux-arm64-gnu
+            rust-target: aarch64-unknown-linux-gnu
           - os: macos-latest
             target: x86_64
             triple: darwin-x64
+            rust-target: ''
           - os: macos-latest
             target: aarch64
             triple: darwin-arm64
+            rust-target: ''
           - os: windows-latest
             target: x86_64
             triple: win32-x64-msvc
+            rust-target: ''
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Install cross-compilation target (Linux aarch64)
+        if: matrix.rust-target != ''
+        run: rustup target add ${{ matrix.rust-target }}
+
       - name: Install cross-compilation dependencies (Linux aarch64)
-        if: startsWith(matrix.os, 'ubuntu') && matrix.target == 'aarch64'
+        if: startsWith(matrix.os, 'ubuntu') && matrix.rust-target != ''
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
@@ -144,9 +153,15 @@ jobs:
 
       - name: Build native addon
         working-directory: node
-        run: cargo build --release
+        shell: bash
+        run: |
+          if [ -n "$RUST_TARGET" ]; then
+            cargo build --release --target "$RUST_TARGET"
+          else
+            cargo build --release
+          fi
         env:
-          CARGO_BUILD_TARGET: ${{ matrix.target == 'aarch64' && 'aarch64-unknown-linux-gnu' || '' }}
+          RUST_TARGET: ${{ matrix.rust-target }}
 
       - name: Copy artifact
         working-directory: node
