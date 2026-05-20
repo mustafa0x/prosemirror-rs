@@ -6,7 +6,7 @@
 //! equals the `expected` field captured from the reference JS implementation.
 
 use prosemirror::dynamic::{DynamicSchema, DynamicNode};
-use prosemirror::model::{Fragment, Node, Slice};
+use prosemirror::model::{Fragment, Slice};
 use prosemirror::transform::Transform;
 
 fn parity_schema() -> DynamicSchema {
