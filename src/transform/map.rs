@@ -363,9 +363,12 @@ impl Mapping {
     pub fn get_mirror(&self, n: usize) -> Option<usize> {
         if let Some(ref mirror) = self.mirror {
             let mut i = 0;
-            while i < mirror.len() {
+            while i + 1 < mirror.len() {
                 if mirror[i] == n {
-                    return Some(mirror[i + if i % 2 == 0 { 1 } else { !0 }]);
+                    return Some(mirror[i + 1]);
+                }
+                if mirror[i + 1] == n {
+                    return Some(mirror[i]);
                 }
                 i += 2;
             }

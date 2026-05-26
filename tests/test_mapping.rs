@@ -101,16 +101,55 @@ fn delete_flags_across() {
 
 #[test]
 fn mapping_invert_roundtrip() {
+    let mapping = mk(vec![
+        (vec![0, 0, 5], None),  // insert 5 at pos 0
+        (vec![10, 3, 0], None), // delete 3 at pos 10 after the insertion
+    ]);
+
+    test_mapping(
+        &mapping,
+        &[
+            (0, 5, 1, false),
+            (4, 9, 1, false),
+            (5, 10, 1, true),
+            (9, 11, 1, false),
+            (15, 17, 1, false),
+        ],
+    );
+}
+
+#[test]
+fn mapping_get_mirror_is_bidirectional() {
     let mut mapping = Mapping::new();
-    mapping.append_map(StepMap::new(vec![0, 0, 5]), None); // insert 5 at pos 0
-    mapping.append_map(StepMap::new(vec![10, 3, 0]), None); // delete 3 at pos 10
-    let inverted = mapping.invert();
-    // Mapping through mapping then inverted should return original
-    let pos = 7;
-    let mapped = mapping.map(pos, 1);
-    let back = inverted.map(mapped, 1);
-    // Due to deletion, we may not get exact roundtrip, but inverted should be valid
-    assert!(back <= 20);
+    mapping.append_map(StepMap::new(vec![2, 4, 0]), None);
+    mapping.append_map(StepMap::new(vec![2, 0, 4]), Some(0));
+
+    assert_eq!(mapping.get_mirror(0), Some(1));
+    assert_eq!(mapping.get_mirror(1), Some(0));
+    assert_eq!(mapping.get_mirror(2), None);
+}
+
+#[test]
+fn mirrored_mapping_recovers_deleted_positions() {
+    let delete = StepMap::new(vec![2, 4, 0]);
+    let mut mapping = Mapping::new();
+    mapping.append_map(delete.clone(), None);
+    mapping.append_map(delete.invert(), Some(0));
+
+    assert_eq!(mapping.map(4, 1), 4);
+    assert_eq!(mapping.map(4, -1), 4);
+}
+
+#[test]
+fn stepmap_recover_restores_positions_inside_replaced_ranges() {
+    let map = StepMap::new(vec![5, 3, 1]);
+    let result = map.map_result(6, 1);
+    let recover = result
+        .recover
+        .expect("position inside replaced range should have recovery token");
+
+    assert_eq!(result.pos, 6);
+    assert_eq!(map.recover(recover), 6);
 }
 
 #[test]
