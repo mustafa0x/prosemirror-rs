@@ -239,7 +239,7 @@ impl<'a, S: Schema> ResolvedPos<'a, S> {
     pub fn marks(&self) -> Vec<S::Mark> {
         let parent = self.parent();
         let index = self.index(self.depth);
-        if parent.content().map_or(true, |c| c.size() == 0) {
+        if parent.content().is_none_or(|c| c.size() == 0) {
             return Vec::new();
         }
         if self.text_offset() > 0 {
@@ -270,7 +270,7 @@ impl<'a, S: Schema> ResolvedPos<'a, S> {
     /// Returns marks that span across the range from this position to `end`.
     pub fn marks_across(&self, _end: &ResolvedPos<S>) -> Option<Vec<S::Mark>> {
         let after = self.parent().maybe_child(self.index(self.depth));
-        if after.is_none() || after.unwrap().is_inline() == false {
+        if after.is_none() || !after.unwrap().is_inline() {
             return None;
         }
         let marks: Vec<S::Mark> = after
@@ -313,19 +313,31 @@ impl<'a, S: Schema> ResolvedPos<'a, S> {
 
     /// Return the later of two resolved positions.
     pub fn max<'b>(&'b self, other: &'b ResolvedPos<'a, S>) -> &'b ResolvedPos<'a, S> {
-        if other.pos > self.pos { other } else { self }
+        if other.pos > self.pos {
+            other
+        } else {
+            self
+        }
     }
 
     /// Return the earlier of two resolved positions.
     pub fn min<'b>(&'b self, other: &'b ResolvedPos<'a, S>) -> &'b ResolvedPos<'a, S> {
-        if other.pos < self.pos { other } else { self }
+        if other.pos < self.pos {
+            other
+        } else {
+            self
+        }
     }
 
     /// Return the position at a given child index within the parent at the given depth.
     pub fn pos_at_index(&self, index: usize, depth: Option<usize>) -> usize {
         let depth = depth.unwrap_or(self.depth);
         let node = self.node(depth);
-        let mut pos = if depth == 0 { 0 } else { self.path[depth - 1].before + 1 };
+        let mut pos = if depth == 0 {
+            0
+        } else {
+            self.path[depth - 1].before + 1
+        };
         for i in 0..index {
             pos += node.child(i).map(|c| c.node_size()).unwrap_or(0);
         }

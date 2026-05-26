@@ -113,7 +113,7 @@ impl StepMap {
                 diff += self.ranges[i * 3 + 2] as isize - self.ranges[i * 3 + 1] as isize;
             }
         }
-        (self.ranges[index * 3] as isize + diff as isize + recover_offset(value) as isize) as usize
+        (self.ranges[index * 3] as isize + diff + recover_offset(value)) as usize
     }
 
     /// Test whether this map touches a given position at the given recovery index
@@ -375,7 +375,9 @@ impl Mapping {
 
     /// Record a mirror pair
     pub fn set_mirror(&mut self, n: usize, m: usize) {
-        self.mirror.get_or_insert_with(Vec::new).extend_from_slice(&[n, m]);
+        self.mirror
+            .get_or_insert_with(Vec::new)
+            .extend_from_slice(&[n, m]);
     }
 
     /// Append the inverse of another mapping in reverse order

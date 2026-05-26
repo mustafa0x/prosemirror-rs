@@ -1,13 +1,14 @@
 //! # The document transformations
 //!
+mod attr_step;
 pub mod map;
 mod mark_step;
+mod node_mark_step;
 mod replace;
 mod replace_step;
 mod step;
 pub mod structure;
-mod attr_step;
-mod node_mark_step;
+#[allow(clippy::module_inception)]
 pub mod transform;
 
 pub use attr_step::{AttrStep, DocAttrStep};
@@ -32,7 +33,12 @@ pub type Steps<S: Schema> = Vec<Step<S>>;
 
 /// Steps that can be applied on a document
 #[derive(Derivative, Deserialize, Serialize)]
-#[derivative(Debug(bound = ""), PartialEq(bound = ""), Eq(bound = ""), Clone(bound = ""))]
+#[derivative(
+    Debug(bound = ""),
+    PartialEq(bound = ""),
+    Eq(bound = ""),
+    Clone(bound = "")
+)]
 #[serde(bound = "", tag = "stepType", rename_all = "camelCase")]
 pub enum Step<S: Schema> {
     /// Replace some content
@@ -127,8 +133,8 @@ impl<S: Schema> Step<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dynamic::DynamicSchema;
     use crate::dynamic::types::Dyn;
+    use crate::dynamic::DynamicSchema;
     use crate::model::{Fragment, Slice};
 
     fn basic_schema() -> DynamicSchema {
@@ -148,9 +154,9 @@ mod tests {
 
     #[test]
     fn test_attr_step_serialize() {
-        let s: Step<Dyn> = serde_json::from_str(
-            r#"{"stepType":"attr","pos":1,"attr":"level","value":2}"#,
-        ).unwrap();
+        let s: Step<Dyn> =
+            serde_json::from_str(r#"{"stepType":"attr","pos":1,"attr":"level","value":2}"#)
+                .unwrap();
         match &s {
             Step::Attr(a) => {
                 assert_eq!(a.pos, 1);
@@ -162,9 +168,9 @@ mod tests {
 
     #[test]
     fn test_doc_attr_step_serialize() {
-        let s: Step<Dyn> = serde_json::from_str(
-            r#"{"stepType":"docAttr","attr":"title","value":"hello"}"#,
-        ).unwrap();
+        let s: Step<Dyn> =
+            serde_json::from_str(r#"{"stepType":"docAttr","attr":"title","value":"hello"}"#)
+                .unwrap();
         match &s {
             Step::DocAttr(d) => {
                 assert_eq!(d.attr, "title");
@@ -213,9 +219,9 @@ mod tests {
 
     #[test]
     fn test_add_mark_step_serialize() {
-        let s: Step<Dyn> = serde_json::from_str(
-            r#"{"stepType":"addMark","mark":{"type":"em"},"from":1,"to":5}"#,
-        ).unwrap();
+        let s: Step<Dyn> =
+            serde_json::from_str(r#"{"stepType":"addMark","mark":{"type":"em"},"from":1,"to":5}"#)
+                .unwrap();
         match &s {
             Step::AddMark(am) => {
                 assert_eq!(am.span.from, 1);

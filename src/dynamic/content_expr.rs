@@ -233,7 +233,7 @@ fn parse_sequence(lexer: &mut Lexer) -> Result<Vec<ExprElement>, ContentExprErro
                     "inline" => ExprAtom::Inline,
                     "block" => ExprAtom::Block,
                     _ => {
-                        if name.chars().next().map_or(false, |c| c.is_uppercase()) {
+                        if name.chars().next().is_some_and(|c| c.is_uppercase()) {
                             ExprAtom::Group(name)
                         } else {
                             ExprAtom::Name(name)
@@ -406,7 +406,7 @@ fn build_nfa(
     // Also propagate epsilon reachability to accept states
     let n = states.len();
     let mut epsilon_closure = vec![Vec::new(); n];
-    for i in 0..n {
+    for (i, closure) in epsilon_closure.iter_mut().enumerate().take(n) {
         let mut visited = std::collections::HashSet::new();
         let mut stack = vec![i];
         while let Some(s) = stack.pop() {
@@ -416,17 +416,7 @@ fn build_nfa(
                 }
             }
         }
-        epsilon_closure[i] = visited.into_iter().collect();
-    }
-
-    // If any state in the epsilon closure of a state is an accept state,
-    // mark that state as also accepting (for epsilon-reachable accepts)
-    for i in 0..n {
-        for &j in &epsilon_closure[i] {
-            if states[j].valid_end {
-                // Don't mark intermediate states, only note that i can reach end
-            }
-        }
+        *closure = visited.into_iter().collect();
     }
 
     Ok(states)
@@ -472,7 +462,7 @@ fn nfa_to_dfa(nfa: &[NfaState]) -> ContentExpr {
     // Compute epsilon closure for each state
     let n = nfa.len();
     let mut eps_closure = vec![Vec::new(); n];
-    for i in 0..n {
+    for (i, closure) in eps_closure.iter_mut().enumerate().take(n) {
         let mut visited = std::collections::HashSet::new();
         let mut stack = vec![i];
         while let Some(s) = stack.pop() {
@@ -482,8 +472,8 @@ fn nfa_to_dfa(nfa: &[NfaState]) -> ContentExpr {
                 }
             }
         }
-        eps_closure[i] = visited.into_iter().collect();
-        eps_closure[i].sort();
+        *closure = visited.into_iter().collect();
+        closure.sort();
     }
 
     // Start state of DFA = epsilon closure of NFA state 0
@@ -562,7 +552,7 @@ impl ContentExpr {
 
     /// Whether the given state is a valid end state.
     pub fn valid_end(&self, state: usize) -> bool {
-        self.states.get(state).map_or(false, |s| s.valid_end)
+        self.states.get(state).is_some_and(|s| s.valid_end)
     }
 
     /// Get the number of outgoing edges from a state.
@@ -610,7 +600,10 @@ mod tests {
     #[test]
     fn test_parse_plus() {
         let mut groups = HashMap::new();
-        groups.insert("block".to_string(), vec!["paragraph".to_string(), "heading".to_string()]);
+        groups.insert(
+            "block".to_string(),
+            vec!["paragraph".to_string(), "heading".to_string()],
+        );
         let expr = parse_content_expr("block+", &groups).unwrap();
         assert!(!expr.valid_end(0));
         assert!(expr.match_type(0, "paragraph").is_some());

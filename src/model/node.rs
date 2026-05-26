@@ -1,6 +1,6 @@
 use super::{
-    replace, util, ContentMatch, ContentMatchError, Fragment, Mark, MarkSet, ReplaceError, ResolveErr,
-    ResolvedPos, Schema, Slice, TextNode,
+    replace, util, ContentMatch, ContentMatchError, Fragment, Mark, MarkSet, ReplaceError,
+    ResolveErr, ResolvedPos, Schema, Slice, TextNode,
 };
 use displaydoc::Display;
 use serde::{Deserialize, Serialize, Serializer};
@@ -82,7 +82,7 @@ pub trait NodeType<S: Schema>: Copy + Clone + Debug + PartialEq + Eq {
             .match_fragment_range(&Fragment::EMPTY, 0..from)
             .and_then(|m| m.match_type(node_type))
             .and_then(|m| m.match_fragment_range(&Fragment::EMPTY, to..))
-            .map_or(false, |m| m.valid_end())
+            .is_some_and(|m| m.valid_end())
     }
 
     /// Check whether the marks are allowed for this node type
@@ -310,7 +310,7 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
     fn content_match_at(&self, index: usize) -> Result<S::ContentMatch, ContentMatchError> {
         self.r#type()
             .content_match()
-            .match_fragment_range(&self.content().unwrap_or(Fragment::EMPTY_REF), 0..index)
+            .match_fragment_range(self.content().unwrap_or(Fragment::EMPTY_REF), 0..index)
             .ok_or(ContentMatchError::InvalidContent)
     }
 
@@ -337,9 +337,9 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
 
         let one = self
             .content_match_at(from)?
-            .match_fragment_range(&replacement, start..end);
+            .match_fragment_range(replacement, start..end);
         let two = one.and_then(|o| {
-            o.match_fragment_range(&self.content().unwrap_or(Fragment::EMPTY_REF), to..)
+            o.match_fragment_range(self.content().unwrap_or(Fragment::EMPTY_REF), to..)
         });
 
         if matches!(two, Some(m) if m.valid_end()) {
@@ -382,7 +382,13 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
     }
 
     /// Invoke a callback for all descendant nodes between `from` and `to`
-    fn nodes_between<F: FnMut(&S::Node, usize) -> bool>(&self, from: usize, to: usize, f: &mut F, offset: usize) {
+    fn nodes_between<F: FnMut(&S::Node, usize) -> bool>(
+        &self,
+        from: usize,
+        to: usize,
+        f: &mut F,
+        offset: usize,
+    ) {
         if let Some(c) = self.content() {
             c.nodes_between(from, to, f, offset);
         }
@@ -396,7 +402,7 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
 
     /// Test whether this node's content matches another node's content
     fn eq(&self, other: &S::Node) -> bool {
-        if self as *const _ == other as *const _ {
+        if std::ptr::eq(self, other) {
             return true;
         }
         if self.r#type() != other.r#type() || self.marks() != other.marks() {
@@ -421,17 +427,22 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
     /// Test whether a range of this node has the given mark type
     fn range_has_mark(&self, from: usize, to: usize, mark_type: S::MarkType) -> bool {
         let mut found = false;
-        self.nodes_between(from, to, &mut |node, _pos| {
-            if let Some(marks) = node.marks() {
-                for m in marks {
-                    if m.r#type() == mark_type {
-                        found = true;
-                        return false;
+        self.nodes_between(
+            from,
+            to,
+            &mut |node, _pos| {
+                if let Some(marks) = node.marks() {
+                    for m in marks {
+                        if m.r#type() == mark_type {
+                            found = true;
+                            return false;
+                        }
                     }
                 }
-            }
-            true
-        }, 0);
+                true
+            },
+            0,
+        );
         found
     }
 
@@ -445,7 +456,7 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
                 .content_match()
                 .match_fragment_range(mc, ..)
                 .and_then(|m| m.match_fragment_range(oc, ..))
-                .map_or(false, |m| m.valid_end())
+                .is_some_and(|m| m.valid_end())
         } else {
             false
         }
