@@ -325,7 +325,7 @@ impl DynamicSchema {
     /// Set up the thread-local type store so that `DynamicNodeType` etc. can work.
     /// If the store is already set (nested call), this is a no-op that just runs the closure.
     pub fn with_types<R>(&self, f: impl FnOnce() -> R) -> R {
-        let store_ref: &DynTypeStore = &*self.store;
+        let store_ref: &DynTypeStore = &self.store;
         let store_static: &'static DynTypeStore = unsafe { std::mem::transmute(store_ref) };
         let already_set = DYN_TYPES.with(|cell| {
             let already = cell.borrow().is_some();

@@ -13,7 +13,7 @@ where
 {
     let mut mapped = vec![];
     for (i, child) in fragment.children().iter().enumerate() {
-        let mut child = child.copy(|c| map_fragment_parent(c, f, &*child));
+        let mut child = child.copy(|c| map_fragment_parent(c, f, child));
 
         if child.is_inline() {
             child = f(child, parent, i)

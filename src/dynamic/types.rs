@@ -254,7 +254,7 @@ impl Schema for Dyn {
 pub(crate) fn with_types<R>(f: impl FnOnce(&DynTypeStore) -> R) -> Option<R> {
     DYN_TYPES.with(|cell| {
         let borrow = cell.borrow();
-        borrow.map(|store| f(store))
+        borrow.map(f)
     })
 }
 
@@ -859,7 +859,7 @@ impl Node<Dyn> for DynamicNode {
                         .get(self.type_idx)
                         .and_then(|t| store.content_exprs.get(t.content_expr_idx))
                         .map(|expr| {
-                            expr.states.first().map_or(true, |s| s.edges.is_empty())
+                            expr.states.first().is_none_or(|s| s.edges.is_empty())
                         })
                 })
                 .flatten()

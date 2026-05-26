@@ -239,7 +239,7 @@ impl<'a, S: Schema> ResolvedPos<'a, S> {
     pub fn marks(&self) -> Vec<S::Mark> {
         let parent = self.parent();
         let index = self.index(self.depth);
-        if parent.content().map_or(true, |c| c.size() == 0) {
+        if parent.content().is_none_or(|c| c.size() == 0) {
             return Vec::new();
         }
         if self.text_offset() > 0 {
@@ -270,7 +270,7 @@ impl<'a, S: Schema> ResolvedPos<'a, S> {
     /// Returns marks that span across the range from this position to `end`.
     pub fn marks_across(&self, _end: &ResolvedPos<S>) -> Option<Vec<S::Mark>> {
         let after = self.parent().maybe_child(self.index(self.depth));
-        if after.is_none() || after.unwrap().is_inline() == false {
+        if after.is_none() || !after.unwrap().is_inline() {
             return None;
         }
         let marks: Vec<S::Mark> = after

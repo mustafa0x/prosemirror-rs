@@ -8,6 +8,7 @@ mod step;
 pub mod structure;
 mod attr_step;
 mod node_mark_step;
+#[allow(clippy::module_inception)]
 pub mod transform;
 
 pub use attr_step::{AttrStep, DocAttrStep};

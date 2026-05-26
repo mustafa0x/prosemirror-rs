@@ -4,7 +4,10 @@
 
 use prosemirror::transform::{Mappable, Mapping, StepMap};
 
-fn mk(maps: Vec<(Vec<usize>, Option<Vec<(usize, usize)>>)>) -> Mapping {
+type MirrorMap = Vec<(usize, usize)>;
+type TestMap = (Vec<usize>, Option<MirrorMap>);
+
+fn mk(maps: Vec<TestMap>) -> Mapping {
     let mut mapping = Mapping::new();
     for (ranges, mirrors) in maps {
         mapping.append_map(StepMap::new(ranges), None);

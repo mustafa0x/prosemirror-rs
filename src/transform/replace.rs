@@ -252,7 +252,7 @@ impl<S: Schema> Fitter<S> {
                         let fits = if let Some(f) = first {
                             match_.match_type(f.r#type()).is_some()
                         } else {
-                            parent_nt.map_or(false, |p| type_.compatible_content(p))
+                            parent_nt.is_some_and(|p| type_.compatible_content(p))
                         };
                         if fits {
                             return Some(Fittable {
@@ -303,7 +303,7 @@ impl<S: Schema> Fitter<S> {
         let open_start = self.unplaced.open_start;
         let open_end = self.unplaced.open_end;
         let inner = content_at(&content, open_start);
-        if inner.child_count() == 0 || inner.first_child().map_or(false, |c| c.is_leaf()) {
+        if inner.child_count() == 0 || inner.first_child().is_some_and(|c| c.is_leaf()) {
             return false;
         }
         let new_open_end = if inner.size() + open_start >= content.size() - open_end {
@@ -530,10 +530,7 @@ impl<S: Schema> Fitter<S> {
             to
         } else {
             move_to_opt = doc.resolve(close.move_pos).ok();
-            match move_to_opt.as_ref() {
-                Some(rp) => rp,
-                None => return None,
-            }
+            move_to_opt.as_ref()?
         };
 
         // Open new frontier nodes for each depth level between close.depth+1
