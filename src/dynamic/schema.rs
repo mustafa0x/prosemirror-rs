@@ -58,7 +58,7 @@ pub struct NodeSpec {
     /// Group(s) this node belongs to (space-separated)
     #[serde(default)]
     pub group: String,
-    /// Marks allowed on this node ("_" for no marks, "" for all marks)
+    /// Marks allowed in this node's content ("_" for all marks, "" for no marks)
     #[serde(default)]
     pub marks: Option<String>,
     /// Attribute specifications
@@ -94,6 +94,13 @@ fn default_true() -> bool {
     true
 }
 
+fn split_space_separated_names(value: &str) -> Vec<String> {
+    value
+        .split_whitespace()
+        .map(|name| name.to_string())
+        .collect()
+}
+
 /// Specification for an attribute.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AttributeSpec {
@@ -111,7 +118,7 @@ pub struct MarkSpec {
     /// Whether this mark is inclusive
     #[serde(default = "default_true")]
     pub inclusive: bool,
-    /// Which other marks this one excludes
+    /// Which other marks this one excludes (defaults to this mark type itself)
     #[serde(default)]
     pub excludes: Option<String>,
     /// Group(s) this mark belongs to
@@ -227,13 +234,12 @@ impl DynamicSchema {
                 && (node_spec.content.contains("text") || node_spec.content.contains("inline"));
             let is_textblock =
                 has_inline_content && (node_spec.inline || (name != "doc" && name != "blockquote"));
-            let allowed_marks = node_spec.marks.as_ref().map(|m| {
-                if m == "_" {
-                    Vec::new()
-                } else {
-                    m.split(' ').map(|s| s.to_string()).collect()
-                }
-            });
+            let allowed_marks = match node_spec.marks.as_deref() {
+                Some("_") => None,
+                Some("") => Some(Vec::new()),
+                Some(marks) => Some(split_space_separated_names(marks)),
+                None => None,
+            };
             let attrs = node_spec
                 .attrs
                 .as_ref()
@@ -290,11 +296,16 @@ impl DynamicSchema {
                         .collect()
                 })
                 .unwrap_or_default();
-            let excludes = mark_spec
-                .excludes
-                .as_ref()
-                .map(|e| e.split(' ').map(|s| s.to_string()).collect())
-                .unwrap_or_default();
+            let excludes = match mark_spec.excludes.as_deref() {
+                Some("") => Vec::new(),
+                Some("_") => {
+                    let mut names: Vec<_> = spec.marks.keys().cloned().collect();
+                    names.sort();
+                    names
+                }
+                Some(excludes) => split_space_separated_names(excludes),
+                None => vec![name.clone()],
+            };
             let groups_list: Vec<String> = mark_spec
                 .group
                 .split(' ')
@@ -517,6 +528,57 @@ mod tests {
             DynamicSchemaError::InvalidSpec(message)
                 if message.contains("both a node and a mark") && message.contains("text")
         ));
+    }
+
+    #[test]
+    fn test_mark_spec_defaults_and_marks_sentinels() {
+        let schema = DynamicSchema::from_json(&serde_json::json!({
+            "nodes": {
+                "doc": { "content": "block+" },
+                "paragraph": { "content": "text*", "group": "block" },
+                "code_block": { "content": "text*", "marks": "", "group": "block" },
+                "all_marks_block": { "content": "text*", "marks": "_", "group": "block" },
+                "text": { "group": "inline" }
+            },
+            "marks": {
+                "strong": {},
+                "em": { "excludes": "" },
+                "link": { "excludes": "strong em" },
+                "comment": { "excludes": "_" }
+            }
+        }))
+        .unwrap();
+
+        let strong_data = &schema.mark_types[schema.mark_type_map["strong"]];
+        let em_data = &schema.mark_types[schema.mark_type_map["em"]];
+        let link_data = &schema.mark_types[schema.mark_type_map["link"]];
+        let comment_data = &schema.mark_types[schema.mark_type_map["comment"]];
+        assert_eq!(strong_data.excludes, vec!["strong".to_string()]);
+        assert!(em_data.excludes.is_empty());
+        assert_eq!(
+            link_data.excludes,
+            vec!["strong".to_string(), "em".to_string()]
+        );
+        assert_eq!(
+            comment_data.excludes,
+            vec![
+                "comment".to_string(),
+                "em".to_string(),
+                "link".to_string(),
+                "strong".to_string()
+            ]
+        );
+
+        schema.with_types(|| {
+            let strong = schema.mark_type("strong").unwrap();
+            let paragraph = schema.node_type("paragraph").unwrap();
+            let code_block = schema.node_type("code_block").unwrap();
+            let all_marks_block = schema.node_type("all_marks_block").unwrap();
+
+            assert!(paragraph.allows_mark_type(strong));
+            assert!(!code_block.allows_mark_type(strong));
+            assert!(all_marks_block.allows_mark_type(strong));
+        });
     }
 
     #[test]
