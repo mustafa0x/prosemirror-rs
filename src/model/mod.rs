@@ -25,8 +25,8 @@ pub(crate) use resolved_pos::Index;
 #[cfg(test)]
 mod tests {
     use super::{fragment::IndexError, Index, Node, ResolvedPos};
-    use crate::dynamic::DynamicSchema;
     use crate::dynamic::types::Dyn;
+    use crate::dynamic::DynamicSchema;
 
     fn basic_schema() -> DynamicSchema {
         DynamicSchema::from_json(&serde_json::json!({
@@ -53,13 +53,15 @@ mod tests {
             let emoji = schema.text("\u{1F60A}");
             assert_eq!(emoji.node_size(), 2);
 
-            let test_3 = schema.node_from_json(&serde_json::json!({
-                "type": "paragraph",
-                "content": [
-                    { "type": "text", "text": "Hallo" },
-                    { "type": "text", "text": "Foo" }
-                ]
-            })).unwrap();
+            let test_3 = schema
+                .node_from_json(&serde_json::json!({
+                    "type": "paragraph",
+                    "content": [
+                        { "type": "text", "text": "Hallo" },
+                        { "type": "text", "text": "Foo" }
+                    ]
+                }))
+                .unwrap();
             assert_eq!(test_3.node_size(), 10);
 
             let ct_3 = test_3.content().unwrap();
@@ -72,21 +74,42 @@ mod tests {
     }
 
     #[test]
+    fn text_between_on_text_node_returns_requested_substring() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let text = schema.text("hello");
+
+            assert_eq!(text.text_between(0, 5, None, None), "hello");
+            assert_eq!(text.text_between(1, 4, None, None), "ell");
+            assert_eq!(text.text_between(2, 2, None, None), "");
+            assert_eq!(text.text_between(3, 12, None, None), "lo");
+            assert_eq!(text.text_between(10, 12, None, None), "");
+
+            let emoji = schema.text("a😊b");
+            assert_eq!(emoji.text_between(0, 1, None, None), "a");
+            assert_eq!(emoji.text_between(1, 3, None, None), "😊");
+            assert_eq!(emoji.text_between(3, 4, None, None), "b");
+        });
+    }
+
+    #[test]
     fn test_resolve() {
         let schema = basic_schema();
         schema.with_types(|| {
-            let test_doc = schema.node_from_json(&serde_json::json!({
-                "type": "doc",
-                "content": [
-                    { "type": "paragraph", "content": [{ "type": "text", "text": "ab" }] },
-                    { "type": "blockquote", "content": [{
-                        "type": "paragraph", "content": [
-                            { "type": "text", "text": "cd", "marks": [{"type": "em"}] },
-                            { "type": "text", "text": "ef" }
-                        ]
-                    }]}
-                ]
-            })).unwrap();
+            let test_doc = schema
+                .node_from_json(&serde_json::json!({
+                    "type": "doc",
+                    "content": [
+                        { "type": "paragraph", "content": [{ "type": "text", "text": "ab" }] },
+                        { "type": "blockquote", "content": [{
+                            "type": "paragraph", "content": [
+                                { "type": "text", "text": "cd", "marks": [{"type": "em"}] },
+                                { "type": "text", "text": "ef" }
+                            ]
+                        }]}
+                    ]
+                }))
+                .unwrap();
 
             let pos = ResolvedPos::<Dyn>::resolve(&test_doc, 0).unwrap();
             assert_eq!(pos.depth, 0);

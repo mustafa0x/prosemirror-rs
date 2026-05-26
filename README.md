@@ -219,8 +219,8 @@ use prosemirror::transform::Transform;
 - `join(pos, depth)` — join adjacent nodes
 - `lift(range, target)` — lift content out of a wrapper
 - `wrap(range, wrappers)` — wrap content in nodes
-- `set_block_type(from, to, type, attrs)` — change block type
-- `set_node_markup(pos, type, attrs, marks)` — change a node's markup
+- `set_block_type(from, to, node_type)` — change block type
+- `set_node_markup(pos, node_type, marks)` — change a node's type or marks; pass `None` as the node type to keep the current type
 - `set_node_attribute(pos, attr, value)` — set a single attribute
 - `set_doc_attribute(attr, value)` — set a document attribute
 
@@ -230,7 +230,7 @@ Content expressions like `"block+"`, `"inline*"`, `"paragraph block*"` are
 parsed at runtime into a DFA (deterministic finite automaton):
 
 ```rust
-use prosemirror::dynamic::content_expr::ContentExpr;
+use prosemirror::dynamic::content_expr::parse_content_expr;
 use std::collections::HashMap;
 
 let groups = HashMap::from([
@@ -238,15 +238,16 @@ let groups = HashMap::from([
     ("inline".to_string(), vec!["text".to_string()]),
 ]);
 
-let expr = ContentExpr::parse("block+", &groups).unwrap();
+let expr = parse_content_expr("block+", &groups).unwrap();
 assert!(!expr.valid_end(0));          // needs at least one block
 assert!(expr.match_type(0, "paragraph").is_some());
 let s1 = expr.match_type(0, "paragraph").unwrap();
 assert!(expr.valid_end(s1));          // one block = valid end
 ```
 
-Supported syntax: `*`, `+`, `?`, `{n}`, `{n,m}`, `{n,}`, `|`, `()`, group
-references, and node type names.
+Currently implemented syntax includes `*`, `+`, `?`, `|`, simple grouping with
+`()`, group references, and node type names. Numeric repetition operators such as
+`{n}`, `{n,m}`, and `{n,}` are not implemented yet.
 
 ## Testing
 
@@ -283,9 +284,7 @@ The test suite is structured as:
 
 ## Feature flags
 
-| Feature | Default | Description |
-|---------|---------|-------------|
-| `cmark` | no | CommonMark parsing/serialization via `pulldown-cmark` |
+This crate currently defines no Cargo feature flags.
 
 ## Differences from JS/Python
 

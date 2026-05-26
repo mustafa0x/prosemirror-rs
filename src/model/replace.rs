@@ -40,9 +40,13 @@ impl<S: Schema> Slice<S> {
         }
     }
 
-    /// The size of this slice (the size of its content).
+    /// The size of this slice, accounting for open depths.
     pub fn size(&self) -> usize {
-        self.content.size()
+        self.content
+            .size()
+            .checked_sub(self.open_start)
+            .and_then(|size| size.checked_sub(self.open_end))
+            .expect("invalid slice open depth")
     }
 
     /// Create a slice with maximally open boundaries from a fragment.
@@ -201,7 +205,7 @@ pub(crate) fn replace_outer<S: Schema>(
         Ok(node.copy(|c| c.replace_child(index, inner).into_owned()))
     } else if slice.content.size() == 0 {
         // When we just delete content, i.e. the replacement slice is empty
-        let content = replace_two_way(rp_from, &rp_to, depth)?;
+        let content = replace_two_way(rp_from, rp_to, depth)?;
         close(node, content)
     } else if slice.open_start == 0
         && slice.open_end == 0
@@ -221,10 +225,10 @@ pub(crate) fn replace_outer<S: Schema>(
             .append(content.cut(rp_to.parent_offset..));
         close(parent, new_content)
     } else {
-        let (n, start, end) = prepare_slice_for_replace(slice, &rp_from);
+        let (n, start, end) = prepare_slice_for_replace(slice, rp_from);
         let rp_start = n.resolve(start)?;
         let rp_end = n.resolve(end)?;
-        let content = replace_three_way(rp_from, &rp_start, &rp_end, &rp_to, depth)?;
+        let content = replace_three_way(rp_from, &rp_start, &rp_end, rp_to, depth)?;
         close(node, content)
     }
 }
@@ -310,18 +314,18 @@ fn replace_three_way<S: Schema>(
     depth: usize,
 ) -> Result<Fragment<S>, ReplaceError<S>> {
     let open_start = if rp_from.depth > depth {
-        Some(joinable(&rp_from, &rp_start, depth + 1)?)
+        Some(joinable(rp_from, rp_start, depth + 1)?)
     } else {
         None
     };
     let open_end = if rp_to.depth > depth {
-        Some(joinable(&rp_end, rp_to, depth + 1)?)
+        Some(joinable(rp_end, rp_to, depth + 1)?)
     } else {
         None
     };
 
     let mut content = Vec::new();
-    add_range(Range::Right(&rp_from), depth, &mut content);
+    add_range(Range::Right(rp_from), depth, &mut content);
     match (open_start, open_end) {
         (Some(os), Some(oe)) if rp_start.index(depth) == rp_end.index(depth) => {
             check_join(os, oe)?;
@@ -331,11 +335,11 @@ fn replace_three_way<S: Schema>(
         }
         _ => {
             if let Some(os) = open_start {
-                let inner = replace_two_way(rp_from, &rp_start, depth + 1)?;
+                let inner = replace_two_way(rp_from, rp_start, depth + 1)?;
                 let closed = close(os, inner)?;
                 add_node::<S>(Cow::Owned(closed), &mut content);
             }
-            add_range(Range::Both(&rp_start, &rp_end), depth, &mut content);
+            add_range(Range::Both(rp_start, rp_end), depth, &mut content);
             if let Some(oe) = open_end {
                 let inner = replace_two_way(rp_end, rp_to, depth + 1)?;
                 let closed = close(oe, inner)?;
@@ -382,9 +386,9 @@ fn prepare_slice_for_replace<'a, S: Schema>(
 
 #[cfg(test)]
 mod tests {
-    
-    use crate::dynamic::DynamicSchema;
-    
+
+    use crate::dynamic::{types::Dyn, DynamicSchema};
+
     use crate::model::{Fragment, Node, NodeType, Slice, SliceError};
     use displaydoc::Display;
     use std::fmt::Debug;
@@ -427,9 +431,7 @@ mod tests {
                 let node = schema.node_from_json(&n).unwrap();
                 (node.clone(), node.slice(r, false).unwrap())
             });
-            let slice = insert_node
-                .map(|(_, s)| s)
-                .unwrap_or_default();
+            let slice = insert_node.map(|(_, s)| s).unwrap_or_default();
             let expected_node = schema.node_from_json(&expected).unwrap();
             assert_eq!(doc.replace(range, &slice), Ok(expected_node));
             Ok(())
@@ -437,23 +439,54 @@ mod tests {
     }
 
     #[test]
+    fn slice_size_subtracts_open_depths() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let paragraph = schema
+                .node_from_json(&serde_json::json!({
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "abcd"}]
+                }))
+                .unwrap();
+            let content: Fragment<Dyn> = Fragment::from(vec![paragraph]);
+
+            assert_eq!(content.size(), 6);
+            assert_eq!(Slice::new(content.clone(), 0, 0).size(), 6);
+            assert_eq!(Slice::new(content, 1, 1).size(), 4);
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid slice open depth")]
+    fn slice_size_rejects_invalid_open_depths() {
+        let _ = Slice::<Dyn>::new(Fragment::new(), 1, 0).size();
+    }
+
+    #[test]
     fn join_on_delete() {
         let schema = basic_schema();
         schema.with_types(|| {
-            let doc = schema.node_from_json(&serde_json::json!({
-                "type": "doc",
-                "content": [
-                    {"type": "paragraph", "content": [{"type": "text", "text": "one"}]},
-                    {"type": "paragraph", "content": [{"type": "text", "text": "two"}]}
-                ]
-            })).unwrap();
+            let doc = schema
+                .node_from_json(&serde_json::json!({
+                    "type": "doc",
+                    "content": [
+                        {"type": "paragraph", "content": [{"type": "text", "text": "one"}]},
+                        {"type": "paragraph", "content": [{"type": "text", "text": "two"}]}
+                    ]
+                }))
+                .unwrap();
             let doc_type = doc.r#type();
             // Check that a single paragraph is valid content for doc
-            let para = schema.node_from_json(&serde_json::json!({
-                "type": "paragraph", "content": [{"type": "text", "text": "onwo"}]
-            })).unwrap();
+            let para = schema
+                .node_from_json(&serde_json::json!({
+                    "type": "paragraph", "content": [{"type": "text", "text": "onwo"}]
+                }))
+                .unwrap();
             let frag = Fragment::from(vec![para]);
-            assert!(doc_type.valid_content(&frag), "doc should accept a single paragraph");
+            assert!(
+                doc_type.valid_content(&frag),
+                "doc should accept a single paragraph"
+            );
             // Now do the replace
             let result = doc.replace(3..7, &Slice::default());
             assert!(result.is_ok(), "replace should succeed: {:?}", result.err());
@@ -550,10 +583,13 @@ mod tests {
     fn rejects_a_bad_fit() {
         let schema = basic_schema();
         schema.with_types(|| {
-            let doc = schema.node_from_json(&serde_json::json!({"type":"doc","content":[{"type":"paragraph"}]})).unwrap();
+            let doc = schema
+                .node_from_json(&serde_json::json!({"type":"doc","content":[{"type":"paragraph"}]}))
+                .unwrap();
             let slice = Slice::new(
                 Fragment::from(vec![crate::dynamic::types::DynamicNode::text("foo")]),
-                0, 0,
+                0,
+                0,
             );
             let result = doc.replace(0..0, &slice);
             assert!(result.is_err());
