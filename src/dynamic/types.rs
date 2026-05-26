@@ -518,7 +518,7 @@ pub struct DynamicMark {
     #[serde(rename = "type")]
     pub type_name: String,
     /// Attributes — omitted when null or empty so serialization matches ProseMirror JS output.
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    #[serde(default, skip_serializing_if = "is_default_attrs")]
     pub attrs: serde_json::Value,
 }
 
@@ -881,5 +881,41 @@ impl From<TextNode<Dyn>> for DynamicNode {
             marks: tn.marks.clone(),
             inner: DynNodeInner::Text(tn),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DynamicMark;
+    use serde_json::json;
+
+    #[test]
+    fn dynamic_mark_omits_null_and_empty_attrs() {
+        assert_eq!(
+            serde_json::to_value(DynamicMark {
+                type_name: "em".to_string(),
+                attrs: serde_json::Value::Null,
+            })
+            .unwrap(),
+            json!({ "type": "em" })
+        );
+
+        assert_eq!(
+            serde_json::to_value(DynamicMark {
+                type_name: "em".to_string(),
+                attrs: json!({}),
+            })
+            .unwrap(),
+            json!({ "type": "em" })
+        );
+
+        assert_eq!(
+            serde_json::to_value(DynamicMark {
+                type_name: "link".to_string(),
+                attrs: json!({ "href": "https://example.com" }),
+            })
+            .unwrap(),
+            json!({ "type": "link", "attrs": { "href": "https://example.com" } })
+        );
     }
 }
