@@ -6,14 +6,31 @@ use crate::model::{
 };
 use crate::model::MarkType;
 use serde::{Deserialize, Deserializer, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::RangeBounds;
-use std::cell::RefCell;
 
 thread_local! {
-    pub(crate) static DYN_TYPES: RefCell<Option<&'static DynTypeStore>> = RefCell::new(None);
+    pub(crate) static DYN_TYPES: RefCell<Option<&'static DynTypeStore>> = const { RefCell::new(None) };
+    static DYN_NODE_TYPE_NAMES: RefCell<HashMap<String, &'static str>> = RefCell::new(HashMap::new());
+}
+
+// The generic NodeType trait currently exposes names as &'static str. Dynamic
+// schemas own names as Strings, so intern the small set of observed node type
+// names to provide stable borrowed names without changing the public trait.
+fn intern_node_type_name(name: &str) -> &'static str {
+    DYN_NODE_TYPE_NAMES.with(|cell| {
+        let mut names = cell.borrow_mut();
+        if let Some(interned) = names.get(name).copied() {
+            interned
+        } else {
+            let interned: &'static str = Box::leak(name.to_owned().into_boxed_str());
+            names.insert(interned.to_owned(), interned);
+            interned
+        }
+    })
 }
 
 /// Stores all type information for a dynamic schema.
@@ -237,7 +254,7 @@ impl Schema for Dyn {
 pub(crate) fn with_types<R>(f: impl FnOnce(&DynTypeStore) -> R) -> Option<R> {
     DYN_TYPES.with(|cell| {
         let borrow = cell.borrow();
-        borrow.map(|store| f(store))
+        borrow.map(f)
     })
 }
 
@@ -501,7 +518,7 @@ pub struct DynamicMark {
     #[serde(rename = "type")]
     pub type_name: String,
     /// Attributes — omitted when null or empty so serialization matches ProseMirror JS output.
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    #[serde(default, skip_serializing_if = "is_default_attrs")]
     pub attrs: serde_json::Value,
 }
 
@@ -600,11 +617,36 @@ impl NodeType<Dyn> for DynamicNodeType {
         }).unwrap_or(true)
     }
 
-    fn is_block(self) -> bool { with_types(|store| !store.node_types[self.idx].inline).unwrap_or(true) }
-    fn name(self) -> &'static str { "" }
-    fn is_atom(self) -> bool { with_types(|store| store.node_types[self.idx].atom).unwrap_or(false) }
-    fn is_textblock(self) -> bool { with_types(|store| store.node_types[self.idx].textblock).unwrap_or(false) }
-    fn inline_content(self) -> bool { with_types(|store| store.node_types[self.idx].has_inline_content).unwrap_or(false) }
+    fn is_block(self) -> bool {
+        with_types(|store| !store.node_types[self.idx].inline).unwrap_or(true)
+    }
+    fn name(self) -> &'static str {
+        with_types(|store| {
+            store
+                .node_types
+                .get(self.idx)
+                .map_or("", |node_type| intern_node_type_name(&node_type.name))
+        })
+        .unwrap_or("")
+    }
+    fn is_atom(self) -> bool {
+        with_types(|store| {
+            store.node_types.get(self.idx).is_some_and(|node_type| {
+                node_type.atom
+                    || store
+                        .content_exprs
+                        .get(node_type.content_expr_idx)
+                        .is_some_and(|expr| expr.valid_end(0) && expr.edge_count(0) == 0)
+            })
+        })
+        .unwrap_or(false)
+    }
+    fn is_textblock(self) -> bool {
+        with_types(|store| store.node_types[self.idx].textblock).unwrap_or(false)
+    }
+    fn inline_content(self) -> bool {
+        with_types(|store| store.node_types[self.idx].has_inline_content).unwrap_or(false)
+    }
 
     fn create_node(self, content: Option<&Fragment<Dyn>>, marks: Option<&MarkSet<Dyn>>) -> DynamicNode {
         let (attrs, name) = with_types(|store| {
@@ -687,6 +729,15 @@ impl Node<Dyn> for DynamicNode {
             DynNodeInner::Text(_) => false,
             DynNodeInner::Element { .. } => {
                 with_types(|store| !store.node_types[self.type_idx].inline).unwrap_or(true)
+            }
+        }
+    }
+
+    fn is_inline(&self) -> bool {
+        match &self.inner {
+            DynNodeInner::Text(_) => true,
+            DynNodeInner::Element { .. } => {
+                with_types(|store| store.node_types[self.type_idx].inline).unwrap_or(false)
             }
         }
     }
@@ -797,7 +848,7 @@ impl Node<Dyn> for DynamicNode {
     fn is_text(&self) -> bool { matches!(self.inner, DynNodeInner::Text(_)) }
     fn is_leaf(&self) -> bool {
         match &self.inner {
-            DynNodeInner::Text(_) => false,
+            DynNodeInner::Text(_) => true,
             DynNodeInner::Element { .. } => {
                 // A node is a leaf only if its *type* cannot hold any children —
                 // i.e. the content-expression DFA has no outgoing edges from
@@ -808,7 +859,7 @@ impl Node<Dyn> for DynamicNode {
                         .get(self.type_idx)
                         .and_then(|t| store.content_exprs.get(t.content_expr_idx))
                         .map(|expr| {
-                            expr.states.first().map_or(true, |s| s.edges.is_empty())
+                            expr.states.first().is_none_or(|s| s.edges.is_empty())
                         })
                 })
                 .flatten()
@@ -830,5 +881,41 @@ impl From<TextNode<Dyn>> for DynamicNode {
             marks: tn.marks.clone(),
             inner: DynNodeInner::Text(tn),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DynamicMark;
+    use serde_json::json;
+
+    #[test]
+    fn dynamic_mark_omits_null_and_empty_attrs() {
+        assert_eq!(
+            serde_json::to_value(DynamicMark {
+                type_name: "em".to_string(),
+                attrs: serde_json::Value::Null,
+            })
+            .unwrap(),
+            json!({ "type": "em" })
+        );
+
+        assert_eq!(
+            serde_json::to_value(DynamicMark {
+                type_name: "em".to_string(),
+                attrs: json!({}),
+            })
+            .unwrap(),
+            json!({ "type": "em" })
+        );
+
+        assert_eq!(
+            serde_json::to_value(DynamicMark {
+                type_name: "link".to_string(),
+                attrs: json!({ "href": "https://example.com" }),
+            })
+            .unwrap(),
+            json!({ "type": "link", "attrs": { "href": "https://example.com" } })
+        );
     }
 }

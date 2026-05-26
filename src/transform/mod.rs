@@ -8,6 +8,7 @@ mod step;
 pub mod structure;
 mod attr_step;
 mod node_mark_step;
+#[allow(clippy::module_inception)]
 pub mod transform;
 
 pub use attr_step::{AttrStep, DocAttrStep};
@@ -187,6 +188,49 @@ mod tests {
             });
             let map = s.get_map();
             assert_eq!(map.ranges, vec![5, 5, 3]);
+        });
+    }
+
+    #[test]
+    fn replace_step_get_map_uses_open_slice_size() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let paragraph = schema
+                .node_from_json(&serde_json::json!({
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "abc"}]
+                }))
+                .unwrap();
+            let s = Step::Replace::<Dyn>(ReplaceStep {
+                span: Span { from: 5, to: 10 },
+                slice: Slice::new(Fragment::from(vec![paragraph]), 1, 1),
+                structure: false,
+            });
+            let map = s.get_map();
+            assert_eq!(map.ranges, vec![5, 5, 3]);
+        });
+    }
+
+    #[test]
+    fn structural_replace_detects_one_unit_text_content() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let doc = schema
+                .node_from_json(&serde_json::json!({
+                    "type": "doc",
+                    "content": [{
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": "a"}]
+                    }]
+                }))
+                .unwrap();
+            let step = Step::Replace::<Dyn>(ReplaceStep {
+                span: Span { from: 1, to: 2 },
+                slice: Slice::default(),
+                structure: true,
+            });
+
+            assert!(matches!(step.apply(&doc), Err(StepError::WouldOverwrite)));
         });
     }
 

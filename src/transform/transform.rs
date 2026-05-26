@@ -474,7 +474,7 @@ impl<S: Schema> Transform<S> {
                 from,
                 to,
                 &mut |node, pos| {
-                    if node.is_block() && !node.is_text() && node.is_leaf() == false {
+                    if node.is_block() && !node.is_text() && !node.is_leaf() {
                         // This is a textblock candidate
                         let mapped_pos = self.mapping.slice(map_from, None).map(pos, 1);
                         positions.push((node.r#type(), mapped_pos, node.node_size()));

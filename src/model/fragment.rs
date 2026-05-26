@@ -172,12 +172,12 @@ impl<S: Schema> Fragment<S> {
                     let new_child = if pos < from || end > to {
                         if let Some(node) = child.text_node() {
                             let len = node.text.len_utf16();
-                            let start = if from > pos { from - pos } else { 0 };
+                            let start = from.saturating_sub(pos);
                             let end = usize::min(len, to - pos);
                             child.cut(start..end)
                         } else {
                             let t = pos + 1;
-                            let start = if from > t { from - t } else { 0 };
+                            let start = from.saturating_sub(t);
                             let end = usize::min(child.content_size(), to - t);
                             child.cut(start..end)
                         }
