@@ -191,6 +191,26 @@ mod tests {
     }
 
     #[test]
+    fn replace_step_get_map_uses_open_slice_size() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let paragraph = schema
+                .node_from_json(&serde_json::json!({
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "abc"}]
+                }))
+                .unwrap();
+            let s = Step::Replace::<Dyn>(ReplaceStep {
+                span: Span { from: 5, to: 10 },
+                slice: Slice::new(Fragment::from(vec![paragraph]), 1, 1),
+                structure: false,
+            });
+            let map = s.get_map();
+            assert_eq!(map.ranges, vec![5, 5, 3]);
+        });
+    }
+
+    #[test]
     fn test_step_map_through_mapping() {
         let schema = basic_schema();
         schema.with_types(|| {
