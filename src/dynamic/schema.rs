@@ -41,7 +41,7 @@ pub struct SchemaSpec {
     #[serde(default)]
     pub marks: HashMap<String, MarkSpec>,
     /// The name of the top-level node type (default: "doc")
-    #[serde(default = "default_top_node")]
+    #[serde(default = "default_top_node", alias = "topNode")]
     pub top_node: String,
 }
 
@@ -181,6 +181,19 @@ impl DynamicSchema {
 
     /// Build a schema from a parsed spec.
     pub fn from_spec(spec: SchemaSpec) -> Result<Self, DynamicSchemaError> {
+        for name in spec.nodes.keys() {
+            if spec.marks.contains_key(name) {
+                return Err(DynamicSchemaError::InvalidSpec(format!(
+                    "schema item name `{}` is used for both a node and a mark",
+                    name
+                )));
+            }
+        }
+
+        if !spec.nodes.contains_key(&spec.top_node) {
+            return Err(DynamicSchemaError::UnknownNodeType(spec.top_node.clone()));
+        }
+
         let mut node_types_data = Vec::new();
         let mut node_type_map = HashMap::new();
         let mut node_groups: HashMap<String, Vec<usize>> = HashMap::new();
@@ -367,6 +380,67 @@ mod tests {
         let heading = &schema.node_types[schema.node_type_map["heading"]];
         assert!(heading.attrs.contains_key("level"));
         assert_eq!(heading.attrs["level"], serde_json::json!(1));
+    }
+
+    fn schema_error(json: serde_json::Value) -> DynamicSchemaError {
+        match DynamicSchema::from_json(&json) {
+            Ok(_) => panic!("schema should fail"),
+            Err(err) => err,
+        }
+    }
+
+    #[test]
+    fn test_schema_accepts_camel_case_top_node() {
+        let schema = DynamicSchema::from_json(&serde_json::json!({
+            "topNode": "root",
+            "nodes": {
+                "root": { "content": "paragraph+" },
+                "paragraph": { "content": "text*", "group": "block" },
+                "text": { "group": "inline" }
+            },
+            "marks": {}
+        }))
+        .unwrap();
+
+        assert_eq!(schema.top_node, "root");
+        assert!(schema.node_type("root").is_some());
+    }
+
+    #[test]
+    fn test_schema_rejects_missing_top_node() {
+        let err = schema_error(serde_json::json!({
+            "topNode": "root",
+            "nodes": {
+                "doc": { "content": "paragraph+" },
+                "paragraph": { "content": "text*", "group": "block" },
+                "text": { "group": "inline" }
+            },
+            "marks": {}
+        }));
+
+        assert!(matches!(
+            err,
+            DynamicSchemaError::UnknownNodeType(name) if name == "root"
+        ));
+    }
+
+    #[test]
+    fn test_schema_rejects_node_mark_name_collisions() {
+        let err = schema_error(serde_json::json!({
+            "nodes": {
+                "doc": { "content": "text*" },
+                "text": { "group": "inline" }
+            },
+            "marks": {
+                "text": {}
+            }
+        }));
+
+        assert!(matches!(
+            err,
+            DynamicSchemaError::InvalidSpec(message)
+                if message.contains("both a node and a mark") && message.contains("text")
+        ));
     }
 
     #[test]
