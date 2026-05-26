@@ -12,6 +12,23 @@ use std::ops::RangeBounds;
 
 thread_local! {
     pub(crate) static DYN_TYPES: RefCell<Option<&'static DynTypeStore>> = const { RefCell::new(None) };
+    static DYN_NODE_TYPE_NAMES: RefCell<HashMap<String, &'static str>> = RefCell::new(HashMap::new());
+}
+
+// The generic NodeType trait currently exposes names as &'static str. Dynamic
+// schemas own names as Strings, so intern the small set of observed node type
+// names to provide stable borrowed names without changing the public trait.
+fn intern_node_type_name(name: &str) -> &'static str {
+    DYN_NODE_TYPE_NAMES.with(|cell| {
+        let mut names = cell.borrow_mut();
+        if let Some(interned) = names.get(name).copied() {
+            interned
+        } else {
+            let interned: &'static str = Box::leak(name.to_owned().into_boxed_str());
+            names.insert(interned.to_owned(), interned);
+            interned
+        }
+    })
 }
 
 /// Stores all type information for a dynamic schema.
@@ -561,10 +578,25 @@ impl NodeType<Dyn> for DynamicNodeType {
         with_types(|store| !store.node_types[self.idx].inline).unwrap_or(true)
     }
     fn name(self) -> &'static str {
-        ""
+        with_types(|store| {
+            store
+                .node_types
+                .get(self.idx)
+                .map_or("", |node_type| intern_node_type_name(&node_type.name))
+        })
+        .unwrap_or("")
     }
     fn is_atom(self) -> bool {
-        with_types(|store| store.node_types[self.idx].atom).unwrap_or(false)
+        with_types(|store| {
+            store.node_types.get(self.idx).is_some_and(|node_type| {
+                node_type.atom
+                    || store
+                        .content_exprs
+                        .get(node_type.content_expr_idx)
+                        .is_some_and(|expr| expr.valid_end(0) && expr.edge_count(0) == 0)
+            })
+        })
+        .unwrap_or(false)
     }
     fn is_textblock(self) -> bool {
         with_types(|store| store.node_types[self.idx].textblock).unwrap_or(false)
