@@ -416,6 +416,17 @@ mod tests {
     }
 
     #[test]
+    fn test_dynamic_text_nodes_are_inline_leaves_without_schema_scope() {
+        let schema = DynamicSchema::from_json(&basic_spec_json()).unwrap();
+        let text = schema.text("hello");
+
+        assert!(text.is_text());
+        assert!(text.is_leaf());
+        assert!(text.is_inline());
+        assert!(!text.is_block());
+    }
+
+    #[test]
     fn test_round_trip() {
         let schema = DynamicSchema::from_json(&basic_spec_json()).unwrap();
         let doc_json = serde_json::json!({

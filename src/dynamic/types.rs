@@ -733,6 +733,15 @@ impl Node<Dyn> for DynamicNode {
         }
     }
 
+    fn is_inline(&self) -> bool {
+        match &self.inner {
+            DynNodeInner::Text(_) => true,
+            DynNodeInner::Element { .. } => {
+                with_types(|store| store.node_types[self.type_idx].inline).unwrap_or(false)
+            }
+        }
+    }
+
     fn mark(&self, marks: MarkSet<Dyn>) -> Self {
         let mut node = self.clone();
         node.marks = marks.clone();
@@ -839,7 +848,7 @@ impl Node<Dyn> for DynamicNode {
     fn is_text(&self) -> bool { matches!(self.inner, DynNodeInner::Text(_)) }
     fn is_leaf(&self) -> bool {
         match &self.inner {
-            DynNodeInner::Text(_) => false,
+            DynNodeInner::Text(_) => true,
             DynNodeInner::Element { .. } => {
                 // A node is a leaf only if its *type* cannot hold any children —
                 // i.e. the content-expression DFA has no outgoing edges from

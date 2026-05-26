@@ -211,6 +211,29 @@ mod tests {
     }
 
     #[test]
+    fn structural_replace_detects_one_unit_text_content() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let doc = schema
+                .node_from_json(&serde_json::json!({
+                    "type": "doc",
+                    "content": [{
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": "a"}]
+                    }]
+                }))
+                .unwrap();
+            let step = Step::Replace::<Dyn>(ReplaceStep {
+                span: Span { from: 1, to: 2 },
+                slice: Slice::default(),
+                structure: true,
+            });
+
+            assert!(matches!(step.apply(&doc), Err(StepError::WouldOverwrite)));
+        });
+    }
+
+    #[test]
     fn test_step_map_through_mapping() {
         let schema = basic_schema();
         schema.with_types(|| {
