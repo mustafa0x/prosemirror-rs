@@ -512,14 +512,46 @@ impl<'de> Deserialize<'de> for DynamicNode {
 // ---------------------------------------------------------------------------
 
 /// A dynamic mark value.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DynamicMark {
     /// The mark type name
     #[serde(rename = "type")]
     pub type_name: String,
     /// Attributes — omitted when null or empty so serialization matches ProseMirror JS output.
-    #[serde(default, skip_serializing_if = "is_default_attrs")]
+    #[serde(skip_serializing_if = "is_default_attrs")]
     pub attrs: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct DynamicMarkHelper {
+    #[serde(rename = "type")]
+    type_name: String,
+    #[serde(default)]
+    attrs: serde_json::Value,
+}
+
+impl<'de> Deserialize<'de> for DynamicMark {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let helper = DynamicMarkHelper::deserialize(deserializer)?;
+        if let Some(known) = with_types(|store| {
+            store
+                .mark_types
+                .iter()
+                .any(|mark_type| mark_type.name == helper.type_name)
+        }) {
+            if !known {
+                return Err(serde::de::Error::custom(format!(
+                    "Unknown mark type: {}",
+                    helper.type_name
+                )));
+            }
+        }
+
+        Ok(DynamicMark {
+            type_name: helper.type_name,
+            attrs: helper.attrs,
+        })
+    }
 }
 
 impl DynamicMark {
