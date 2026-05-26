@@ -1,6 +1,7 @@
 //! Position mapping infrastructure: `StepMap`, `MapResult`, `Mapping`.
 
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
 const DEL_BEFORE: u8 = 1;
 const DEL_AFTER: u8 = 2;
@@ -104,16 +105,39 @@ impl StepMap {
         Self::EMPTY
     }
 
-    /// Recover a position from a packed recovery value
-    pub fn recover(&self, value: usize) -> usize {
-        let mut diff = 0;
+    /// Recover a position from a packed recovery value.
+    ///
+    /// Recovery values are expected to come from this map's own [`MapResult`]
+    /// values or from a mirrored map with the same range shape. Values with an
+    /// invalid range index, an impossible offset, malformed ranges, or checked
+    /// arithmetic overflow return `None` rather than indexing outside the map's
+    /// range triples.
+    pub fn recover(&self, value: usize) -> Option<usize> {
+        if !self.ranges.len().is_multiple_of(3) {
+            return None;
+        }
+
         let index = recover_index(value);
+        let range_start = index.checked_mul(3)?;
+        let range_end = range_start.checked_add(3)?;
+        let range = self.ranges.get(range_start..range_end)?;
+        let offset = recover_offset(value);
+        if offset > range[1].max(range[2]) {
+            return None;
+        }
+
+        let mut diff: isize = 0;
         if !self.inverted {
-            for i in 0..index {
-                diff += self.ranges[i * 3 + 2] as isize - self.ranges[i * 3 + 1] as isize;
+            for range in self.ranges[..range_start].chunks_exact(3) {
+                let old_size = isize::try_from(range[1]).ok()?;
+                let new_size = isize::try_from(range[2]).ok()?;
+                diff = diff.checked_add(new_size.checked_sub(old_size)?)?;
             }
         }
-        (self.ranges[index * 3] as isize + diff as isize + recover_offset(value) as isize) as usize
+        let start = isize::try_from(range[0]).ok()?;
+        let offset = isize::try_from(offset).ok()?;
+        let recovered = start.checked_add(diff)?.checked_add(offset)?;
+        usize::try_from(recovered).ok()
     }
 
     /// Test whether this map touches a given position at the given recovery index
@@ -283,8 +307,8 @@ fn recover_index(value: usize) -> usize {
     value & 0xFFFF
 }
 
-fn recover_offset(value: usize) -> isize {
-    ((value - (value & 0xFFFF)) / 65536) as isize
+fn recover_offset(value: usize) -> usize {
+    (value - (value & 0xFFFF)) / 65536
 }
 
 /// A pipeline of [`StepMap`]s with optional mirror-pair tracking for rebasing.
@@ -431,10 +455,12 @@ impl Mapping {
             if let Some(recover) = result.recover {
                 if let Some(corr) = self.get_mirror(i) {
                     if corr > i && corr < self.to {
-                        i = corr;
-                        pos = self.maps[corr].recover(recover);
-                        i += 1;
-                        continue;
+                        if let Some(recovered) = self.maps[corr].recover(recover) {
+                            i = corr;
+                            pos = recovered;
+                            i += 1;
+                            continue;
+                        }
                     }
                 }
             }

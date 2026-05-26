@@ -149,7 +149,35 @@ fn stepmap_recover_restores_positions_inside_replaced_ranges() {
         .expect("position inside replaced range should have recovery token");
 
     assert_eq!(result.pos, 6);
-    assert_eq!(map.recover(recover), 6);
+    assert_eq!(map.recover(recover), Some(6));
+}
+
+#[test]
+fn stepmap_recover_rejects_invalid_recovery_tokens() {
+    let map = StepMap::new(vec![5, 3, 1]);
+
+    // The low 16 bits encode the range index. This map only has range index 0,
+    // so index 1 must be rejected instead of indexing past the single range.
+    assert_eq!(map.recover(1), None);
+
+    // The high bits encode the offset inside the replaced span. This replaced
+    // span is only three units wide, so offset 4 is invalid.
+    assert_eq!(map.recover(4 * 65_536), None);
+
+    // Empty or malformed raw range vectors cannot recover any token.
+    assert_eq!(StepMap::empty().recover(0), None);
+    assert_eq!(StepMap::new(vec![5, 3]).recover(0), None);
+}
+
+#[test]
+fn mapping_ignores_invalid_mirror_recovery_tokens() {
+    let mut mapping = Mapping::new();
+    mapping.append_map(StepMap::new(vec![2, 4, 0]), None);
+    mapping.append_map(StepMap::empty(), Some(0));
+
+    // The mirror pair points at a map that cannot recover the deletion token.
+    // Mapping should fall back to normal mapping instead of panicking.
+    assert_eq!(mapping.map(4, 1), 2);
 }
 
 #[test]
