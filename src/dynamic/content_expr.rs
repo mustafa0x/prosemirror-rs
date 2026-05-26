@@ -182,7 +182,7 @@ pub fn parse_content_expr(
     groups: &HashMap<String, Vec<String>>,
 ) -> Result<ContentExpr, ContentExprError> {
     let input = input.trim();
-    if input.is_empty() || input == "empty" || input == "none" {
+    if input.is_empty() {
         // Empty content: single accepting state with no edges
         return Ok(ContentExpr {
             states: vec![ContentState {
@@ -194,6 +194,11 @@ pub fn parse_content_expr(
 
     let mut lexer = Lexer::new(input);
     let alternatives = parse_expr(&mut lexer, groups)?;
+    match lexer.next_token()? {
+        Token::Eof => {}
+        Token::CloseParen => return Err(ContentExprError::MismatchedParens),
+        _ => return Err(ContentExprError::InvalidOperator),
+    }
 
     // Build NFA then convert to DFA
     let nfa = build_nfa(&alternatives, groups)?;
@@ -201,14 +206,17 @@ pub fn parse_content_expr(
     Ok(dfa)
 }
 
-fn parse_expr(lexer: &mut Lexer, groups: &HashMap<String, Vec<String>>) -> Result<Vec<Vec<ExprElement>>, ContentExprError> {
+fn parse_expr(
+    lexer: &mut Lexer,
+    groups: &HashMap<String, Vec<String>>,
+) -> Result<Vec<Vec<ExprElement>>, ContentExprError> {
     let mut alternatives = Vec::new();
-    alternatives.push(parse_sequence(lexer, groups)?);
+    alternatives.push(parse_nonempty_sequence(lexer, groups)?);
 
     loop {
         match lexer.next_token()? {
             Token::Pipe => {
-                alternatives.push(parse_sequence(lexer, groups)?);
+                alternatives.push(parse_nonempty_sequence(lexer, groups)?);
             }
             Token::Eof => break,
             Token::CloseParen => {
@@ -223,7 +231,21 @@ fn parse_expr(lexer: &mut Lexer, groups: &HashMap<String, Vec<String>>) -> Resul
     Ok(alternatives)
 }
 
-fn parse_sequence(lexer: &mut Lexer, groups: &HashMap<String, Vec<String>>) -> Result<Vec<ExprElement>, ContentExprError> {
+fn parse_nonempty_sequence(
+    lexer: &mut Lexer,
+    groups: &HashMap<String, Vec<String>>,
+) -> Result<Vec<ExprElement>, ContentExprError> {
+    let sequence = parse_sequence(lexer, groups)?;
+    if sequence.is_empty() {
+        return Err(ContentExprError::EmptyExpr);
+    }
+    Ok(sequence)
+}
+
+fn parse_sequence(
+    lexer: &mut Lexer,
+    groups: &HashMap<String, Vec<String>>,
+) -> Result<Vec<ExprElement>, ContentExprError> {
     let mut elements = Vec::new();
     loop {
         let saved = lexer.pos;
@@ -597,6 +619,50 @@ mod tests {
         let expr = parse_content_expr("", &HashMap::new()).unwrap();
         assert!(expr.valid_end(0));
         assert_eq!(expr.states.len(), 1);
+    }
+
+    #[test]
+    fn test_empty_and_none_are_regular_node_names() {
+        for name in ["empty", "none"] {
+            let expr = parse_content_expr(name, &HashMap::new()).unwrap();
+            assert!(!expr.valid_end(0));
+            assert_eq!(expr.match_type(0, name), Some(1));
+            assert!(expr.valid_end(1));
+        }
+    }
+
+    #[test]
+    fn test_parse_rejects_unconsumed_close_parens() {
+        for input in ["paragraph)", "paragraph heading)", "(paragraph))"] {
+            assert!(
+                matches!(
+                    parse_content_expr(input, &HashMap::new()),
+                    Err(ContentExprError::MismatchedParens)
+                ),
+                "expected {:?} to reject the unmatched trailing parenthesis",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_rejects_empty_alternatives() {
+        for input in [
+            "| paragraph",
+            "paragraph |",
+            "paragraph || heading",
+            "()",
+            "(paragraph |)",
+        ] {
+            assert!(
+                matches!(
+                    parse_content_expr(input, &HashMap::new()),
+                    Err(ContentExprError::EmptyExpr)
+                ),
+                "expected {:?} to reject empty alternatives",
+                input
+            );
+        }
     }
 
     #[test]
