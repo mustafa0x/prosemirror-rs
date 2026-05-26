@@ -343,6 +343,7 @@ mod tests {
                     "group": "inline",
                     "atom": true
                 },
+                "horizontal_rule": { "group": "block" },
                 "hard_break": { "inline": true, "group": "inline" }
             },
             "marks": {
@@ -361,7 +362,7 @@ mod tests {
         assert!(schema.node_type("heading").is_some());
         assert!(schema.node_type("text").is_some());
         assert!(schema.node_type("nonexistent").is_none());
-        assert_eq!(schema.node_types.len(), 6);
+        assert_eq!(schema.node_types.len(), 7);
         assert_eq!(schema.mark_types.len(), 3);
         let heading = &schema.node_types[schema.node_type_map["heading"]];
         assert!(heading.attrs.contains_key("level"));
@@ -395,6 +396,22 @@ mod tests {
             let para_type = schema.node_type("paragraph").unwrap();
             assert!(cm.match_type(para_type).is_some());
             assert!(!cm.valid_end());
+        });
+    }
+
+    #[test]
+    fn test_dynamic_node_type_name_and_atom_flags() {
+        let schema = DynamicSchema::from_json(&basic_spec_json()).unwrap();
+        schema.with_types(|| {
+            let paragraph = schema.node_type("paragraph").unwrap();
+            let horizontal_rule = schema.node_type("horizontal_rule").unwrap();
+            let image = schema.node_type("image").unwrap();
+
+            assert_eq!(paragraph.name(), "paragraph");
+            assert_eq!(horizontal_rule.name(), "horizontal_rule");
+            assert!(!paragraph.is_atom());
+            assert!(horizontal_rule.is_atom());
+            assert!(image.is_atom());
         });
     }
 
