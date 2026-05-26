@@ -374,6 +374,19 @@ pub trait Node<S: Schema<Node = Self> + 'static>:
         block_separator: Option<&str>,
         leaf_text: Option<&str>,
     ) -> String {
+        if let Some(text_node) = self.text_node() {
+            let len = text_node.text.len_utf16();
+            let from = from.min(len);
+            let to = to.min(len);
+
+            if from >= to {
+                return String::new();
+            }
+
+            let (_, rest) = util::split_at_utf16(text_node.text.as_str(), from);
+            return util::split_at_utf16(rest, to - from).0.to_owned();
+        }
+
         let mut result = String::new();
         if let Some(c) = self.content() {
             c.text_between(&mut result, true, from, to, block_separator, leaf_text);

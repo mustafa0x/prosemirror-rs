@@ -74,6 +74,25 @@ mod tests {
     }
 
     #[test]
+    fn text_between_on_text_node_returns_requested_substring() {
+        let schema = basic_schema();
+        schema.with_types(|| {
+            let text = schema.text("hello");
+
+            assert_eq!(text.text_between(0, 5, None, None), "hello");
+            assert_eq!(text.text_between(1, 4, None, None), "ell");
+            assert_eq!(text.text_between(2, 2, None, None), "");
+            assert_eq!(text.text_between(3, 12, None, None), "lo");
+            assert_eq!(text.text_between(10, 12, None, None), "");
+
+            let emoji = schema.text("a😊b");
+            assert_eq!(emoji.text_between(0, 1, None, None), "a");
+            assert_eq!(emoji.text_between(1, 3, None, None), "😊");
+            assert_eq!(emoji.text_between(3, 4, None, None), "b");
+        });
+    }
+
+    #[test]
     fn test_resolve() {
         let schema = basic_schema();
         schema.with_types(|| {
